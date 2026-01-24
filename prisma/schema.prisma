@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
   relationMode = "prisma"
 }
@@ -222,7 +222,7 @@ model Message {
 
   lineAccount LineAccount? @relation(fields: [lineAccountId], references: [id])
   user        LineUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  replyTo     Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replyTo     Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   replies     Message[]    @relation("MessageReplies")
 
   @@index([lineAccountId])
