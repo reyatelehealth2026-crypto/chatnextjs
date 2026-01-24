@@ -40,14 +40,42 @@ vercel --prod
 
 ไปที่ **Vercel Dashboard** → **Project Settings** → **Environment Variables**
 
-เพิ่ม:
-- `DATABASE_URL` (เปลี่ยน localhost เป็น public IP)
-- `NEXTAUTH_URL` (ใช้ URL ที่ Vercel ให้มา)
-- `NEXTAUTH_SECRET`
-- `LINE_CHANNEL_ACCESS_TOKEN`
-- `LINE_CHANNEL_SECRET`
-- `PHP_API_URL`
-- `NODE_ENV=production`
+#### 📋 Template พร้อมใช้ (Copy-Paste)
+
+```env
+# Database (⚠️ เปลี่ยน localhost เป็น public IP หรือใช้ Prisma Data Proxy)
+DATABASE_URL="mysql://USERNAME:PASSWORD@YOUR_SERVER_IP:3306/DATABASE_NAME?connection_limit=10"
+
+# NextAuth (⚠️ ใช้ URL ที่ Vercel ให้มาหลัง deploy ครั้งแรก)
+NEXTAUTH_URL="https://your-app.vercel.app"
+
+# NextAuth Secret (ใช้จาก .env.local หรือ generate ใหม่)
+NEXTAUTH_SECRET="your-secret-key-here"
+
+# LINE API (จาก LINE Developers Console หรือ .env.local)
+LINE_CHANNEL_ACCESS_TOKEN="your-line-access-token"
+LINE_CHANNEL_SECRET="your-line-secret"
+
+# PHP API URL
+PHP_API_URL="https://cny.re-ya.com"
+
+# Node Environment
+NODE_ENV="production"
+```
+
+#### 📍 หาค่าจากที่ไหน?
+
+| Variable | หาจาก | หมายเหตุ |
+|----------|-------|----------|
+| `DATABASE_URL` | `.env.local` | ⚠️ **สำคัญ**: เปลี่ยน `localhost` เป็น **public IP** หรือใช้ **Prisma Data Proxy** |
+| `NEXTAUTH_URL` | Vercel Dashboard | จะได้หลัง deploy ครั้งแรก (เช่น `https://inbox-nextjs.vercel.app`) |
+| `NEXTAUTH_SECRET` | `.env.local` | หรือ generate ใหม่: `openssl rand -base64 32` |
+| `LINE_CHANNEL_ACCESS_TOKEN` | `.env.local` หรือ [LINE Developers Console](https://developers.line.biz/console/) | |
+| `LINE_CHANNEL_SECRET` | `.env.local` หรือ [LINE Developers Console](https://developers.line.biz/console/) | |
+| `PHP_API_URL` | `.env.local` | ใช้ค่าเดิม (เช่น `https://cny.re-ya.com`) |
+| `NODE_ENV` | - | ใช้ `production` |
+
+**ดูรายละเอียดเพิ่มเติม**: อ่าน [GITHUB_DEPLOY.md](./GITHUB_DEPLOY.md) หรือ [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md)
 
 ### 4️⃣ Redeploy
 

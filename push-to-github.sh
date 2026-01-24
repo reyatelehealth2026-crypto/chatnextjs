@@ -6,6 +6,9 @@
 
 set -e
 
+# NOTE (Windows):
+# - แนะนำให้รันผ่าน Git Bash หรือ WSL: `bash ./push-to-github.sh`
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -17,6 +20,72 @@ NC='\033[0m'
 CHECK_MARK="${GREEN}✓${NC}"
 CROSS_MARK="${RED}✗${NC}"
 ARROW="${BLUE}➜${NC}"
+
+die() {
+    echo -e "${CROSS_MARK} $1"
+    exit 1
+}
+
+scan_for_secrets() {
+    echo ""
+    echo -e "${ARROW} ${CYAN}ตรวจสอบไฟล์ก่อน commit (กันเผลอ push secret)...${NC}"
+
+    # Scan tracked + untracked (but not ignored) files for common secrets.
+    # If found, abort the commit/push.
+    local files
+    files=$(git ls-files -co --exclude-standard) || true
+
+    if [ -z "$files" ]; then
+        echo -e "${CHECK_MARK} ไม่พบไฟล์ให้ตรวจสอบ"
+        return 0
+    fi
+
+    local found=0
+
+    # 1) Prisma Accelerate api_key (allow placeholder YOUR_API_KEY)
+    if echo "$files" | xargs -I{} sh -c 'test -f "{}" && grep -nE "accelerate\.prisma-data\.net/\\?api_key=" "{}" 2>/dev/null || true' \
+        | grep -v "api_key=YOUR_API_KEY" >/dev/null 2>&1; then
+        found=1
+        echo -e "${RED}พบ Prisma Accelerate api_key ในไฟล์:${NC}"
+        echo "$files" | xargs -I{} sh -c 'test -f "{}" && grep -nE "accelerate\.prisma-data\.net/\\?api_key=" "{}" 2>/dev/null || true' \
+            | grep -v "api_key=YOUR_API_KEY" || true
+        echo ""
+        echo -e "${YELLOW}แก้ไข:${NC} ลบ/แทนที่เป็น placeholder แล้วไป Rotate/Revoke key ใน Prisma Console"
+    fi
+
+    # 2) LINE tokens/secrets
+    if echo "$files" | xargs -I{} sh -c 'test -f "{}" && grep -nE "LINE_CHANNEL_ACCESS_TOKEN=\".{10,}\"|LINE_CHANNEL_SECRET=\".{10,}\"" "{}" 2>/dev/null || true' \
+        | grep -v 'LINE_CHANNEL_ACCESS_TOKEN=""' \
+        | grep -v 'LINE_CHANNEL_SECRET=""' >/dev/null 2>&1; then
+        found=1
+        echo -e "${RED}พบ LINE token/secret ในไฟล์:${NC}"
+        echo "$files" | xargs -I{} sh -c 'test -f "{}" && grep -nE "LINE_CHANNEL_ACCESS_TOKEN=\".{10,}\"|LINE_CHANNEL_SECRET=\".{10,}\"" "{}" 2>/dev/null || true' \
+            | grep -v 'LINE_CHANNEL_ACCESS_TOKEN=""' \
+            | grep -v 'LINE_CHANNEL_SECRET=""' || true
+        echo ""
+        echo -e "${YELLOW}แก้ไข:${NC} ลบออกจากไฟล์ตัวอย่าง แล้วออก token ใหม่ใน LINE Developers (ถ้าจำเป็น)"
+    fi
+
+    # 3) MySQL credentials in URL (allow placeholder)
+    if echo "$files" | xargs -I{} sh -c 'test -f "{}" && grep -nE "mysql://[^\"[:space:]]+:[^\"[:space:]]+@[^\"[:space:]]+" "{}" 2>/dev/null || true' \
+        | grep -v "mysql://user:password@" \
+        | grep -v "YOUR_SERVER_PUBLIC_IP" >/dev/null 2>&1; then
+        found=1
+        echo -e "${RED}พบ MySQL URL ที่มี user/password ในไฟล์:${NC}"
+        echo "$files" | xargs -I{} sh -c 'test -f "{}" && grep -nE "mysql://[^\"[:space:]]+:[^\"[:space:]]+@[^\"[:space:]]+" "{}" 2>/dev/null || true' \
+            | grep -v "mysql://user:password@" \
+            | grep -v "YOUR_SERVER_PUBLIC_IP" || true
+        echo ""
+        echo -e "${YELLOW}แก้ไข:${NC} ย้ายค่าไป Vercel Environment Variables และใส่ในไฟล์ตัวอย่างเป็น placeholder เท่านั้น"
+    fi
+
+    if [ "$found" -eq 1 ]; then
+        echo ""
+        die "หยุดการ commit/push เพราะพบ secret ในไฟล์ (เพื่อความปลอดภัย)"
+    fi
+
+    echo -e "${CHECK_MARK} ไม่พบ secret ที่เข้าข่ายอันตราย"
+}
 
 echo ""
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
@@ -78,6 +147,7 @@ fi
 # Add files
 echo ""
 echo -e "${ARROW} ${CYAN}กำลังเพิ่มไฟล์...${NC}"
+scan_for_secrets
 git add .
 echo -e "${CHECK_MARK} เพิ่มไฟล์เสร็จสิ้น"
 

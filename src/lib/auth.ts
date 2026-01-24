@@ -3,8 +3,16 @@ import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import prisma from "./prisma"
 
+const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET
+if (!authSecret) {
+  throw new Error(
+    "Missing AUTH_SECRET (recommended) or NEXTAUTH_SECRET environment variable"
+  )
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
+  secret: authSecret,
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -102,13 +110,5 @@ declare module "next-auth" {
       role: string
       lineAccountId: number | null
     }
-  }
-}
-
-declare module "@auth/core/jwt" {
-  interface JWT {
-    id: string
-    role: string
-    lineAccountId: number | null
   }
 }
