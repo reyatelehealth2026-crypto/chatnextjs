@@ -1,0 +1,310 @@
+// Prisma schema for LINE CRM Pharmacy Inbox System
+// Using SQLite for development, MySQL for production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+// NextAuth.js models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  adminUser     AdminUser?
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// LINE Account (Bot) model
+model LineAccount {
+  id                 Int       @id @default(autoincrement())
+  name               String
+  channelId          String?   @map("channel_id")
+  channelSecret      String    @unique @map("channel_secret")
+  channelAccessToken String    @map("channel_access_token")
+  webhookUrl         String?   @map("webhook_url")
+  basicId            String?   @map("basic_id")
+  pictureUrl         String?   @map("picture_url")
+  liffId             String?   @map("liff_id")
+  isActive           Boolean   @default(true) @map("is_active")
+  isDefault          Boolean   @default(false) @map("is_default")
+  settings           String?   // JSON stored as string for SQLite
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  adminUsers     AdminUser[]
+  adminBotAccess AdminBotAccess[]
+  lineUsers      LineUser[]
+  messages       Message[]
+  userTags       UserTag[]
+
+  @@map("line_accounts")
+}
+
+// Admin User model
+model AdminUser {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  email         String    @unique
+  password      String
+  displayName   String?   @map("display_name")
+  avatarUrl     String?   @map("avatar_url")
+  role          String    @default("staff") // super_admin, admin, pharmacist, staff, user
+  lineAccountId Int?      @map("line_account_id")
+  permissions   String?   // JSON stored as string
+  isActive      Boolean   @default(true) @map("is_active")
+  lastLogin     DateTime? @map("last_login")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  lineAccount             LineAccount?             @relation(fields: [lineAccountId], references: [id])
+  user                    User?                    @relation(fields: [email], references: [email])
+  botAccess               AdminBotAccess[]
+  conversationAssignments ConversationAssignment[] @relation("AssignedAdmin")
+  assignedConversations   ConversationAssignment[] @relation("AssignerAdmin")
+  tagAssignments          UserTagAssignment[]
+  activityLogs            AdminActivityLog[]
+
+  @@index([role])
+  @@index([lineAccountId])
+  @@map("admin_users")
+}
+
+// Admin Bot Access permissions
+model AdminBotAccess {
+  id             String   @id @default(cuid())
+  adminId        String   @map("admin_id")
+  lineAccountId  Int      @map("line_account_id")
+  canView        Boolean  @default(false) @map("can_view")
+  canEdit        Boolean  @default(false) @map("can_edit")
+  canBroadcast   Boolean  @default(false) @map("can_broadcast")
+  canManageUsers Boolean  @default(false) @map("can_manage_users")
+  canManageShop  Boolean  @default(false) @map("can_manage_shop")
+  canViewAnalytics Boolean @default(false) @map("can_view_analytics")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  admin       AdminUser   @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  lineAccount LineAccount @relation(fields: [lineAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([adminId, lineAccountId])
+  @@map("admin_bot_access")
+}
+
+// Admin Activity Log
+model AdminActivityLog {
+  id          String   @id @default(cuid())
+  adminId     String   @map("admin_id")
+  action      String
+  description String?
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  metadata    String?  // JSON stored as string
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([action])
+  @@map("admin_activity_log")
+}
+
+// LINE User (Customer) model
+model LineUser {
+  id              String    @id @default(cuid())
+  lineAccountId   Int?      @map("line_account_id")
+  lineUserId      String    @map("line_user_id")
+  displayName     String?   @map("display_name")
+  pictureUrl      String?   @map("picture_url")
+  statusMessage   String?   @map("status_message")
+  firstName       String?   @map("first_name")
+  lastName        String?   @map("last_name")
+  phone           String?
+  email           String?
+  birthDate       DateTime? @map("birth_date")
+  gender          String?
+  weight          Float?
+  height          Float?
+  address         String?
+  district        String?
+  province        String?
+  postalCode      String?   @map("postal_code")
+  memberId        String?   @map("member_id")
+  isRegistered    Boolean   @default(false) @map("is_registered")
+  registeredAt    DateTime? @map("registered_at")
+  isBlocked       Boolean   @default(false) @map("is_blocked")
+  membershipLevel String    @default("bronze") @map("membership_level")
+  tier            String    @default("silver")
+  points          Int       @default(0)
+  totalPoints     Int       @default(0) @map("total_points")
+  availablePoints Int       @default(0) @map("available_points")
+  usedPoints      Int       @default(0) @map("used_points")
+  loyaltyPoints   Int       @default(0) @map("loyalty_points")
+  totalSpent      Float     @default(0) @map("total_spent")
+  orderCount      Int       @default(0) @map("order_count")
+  lastInteraction DateTime? @map("last_interaction")
+  chatStatus      String?   @map("chat_status") // active, pending, resolved
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  lineAccount             LineAccount?             @relation(fields: [lineAccountId], references: [id])
+  messages                Message[]
+  conversationAssignments ConversationAssignment[]
+  tagAssignments          UserTagAssignment[]
+
+  @@unique([lineAccountId, lineUserId])
+  @@index([lineUserId])
+  @@index([lineAccountId])
+  @@index([lastInteraction])
+  @@index([chatStatus])
+  @@map("line_users")
+}
+
+// Message model
+model Message {
+  id            String   @id @default(cuid())
+  lineAccountId Int?     @map("line_account_id")
+  userId        String   @map("user_id")
+  direction     String   // incoming, outgoing
+  messageType   String   @map("message_type") // text, image, video, audio, file, location, sticker, flex
+  content       String?
+  mediaUrl      String?  @map("media_url")
+  metadata      String?  // JSON stored as string (for sticker, location, flex data)
+  replyToken    String?  @map("reply_token")
+  isRead        Boolean  @default(false) @map("is_read")
+  sentBy        String?  @map("sent_by") // admin user id for outgoing messages
+  replyToId     String?  @map("reply_to_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  lineAccount LineAccount? @relation(fields: [lineAccountId], references: [id])
+  user        LineUser     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replyTo     Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies     Message[]    @relation("MessageReplies")
+
+  @@index([lineAccountId])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([direction, isRead])
+  @@map("messages")
+}
+
+// Conversation Assignment (Multi-assignee support)
+model ConversationAssignment {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  adminId    String   @map("admin_id")
+  assignedBy String?  @map("assigned_by")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  status     String   @default("active") // active, resolved, transferred
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     LineUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin    AdminUser  @relation("AssignedAdmin", fields: [adminId], references: [id], onDelete: Cascade)
+  assigner AdminUser? @relation("AssignerAdmin", fields: [assignedBy], references: [id])
+
+  @@unique([userId, adminId])
+  @@index([status])
+  @@map("conversation_assignments")
+}
+
+// User Tag model
+model UserTag {
+  id            String   @id @default(cuid())
+  lineAccountId Int?     @map("line_account_id")
+  name          String
+  color         String   @default("#3B82F6")
+  description   String?
+  isAuto        Boolean  @default(false) @map("is_auto")
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  lineAccount  LineAccount?        @relation(fields: [lineAccountId], references: [id])
+  assignments  UserTagAssignment[]
+  autoTagRules AutoTagRule[]
+
+  @@unique([lineAccountId, name])
+  @@index([lineAccountId])
+  @@map("user_tags")
+}
+
+// User Tag Assignment
+model UserTagAssignment {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  tagId      String   @map("tag_id")
+  assignedBy String?  @map("assigned_by")
+  isAuto     Boolean  @default(false) @map("is_auto")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user  LineUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag   UserTag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  admin AdminUser? @relation(fields: [assignedBy], references: [id])
+
+  @@unique([userId, tagId])
+  @@map("user_tag_assignments")
+}
+
+// Auto Tag Rule
+model AutoTagRule {
+  id          String   @id @default(cuid())
+  tagId       String   @map("tag_id")
+  triggerType String   @map("trigger_type") // on_follow, on_message, on_order, on_tier_upgrade, etc.
+  conditions  String   // JSON stored as string
+  isActive    Boolean  @default(true) @map("is_active")
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tag UserTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@index([triggerType])
+  @@index([isActive])
+  @@map("auto_tag_rules")
+}

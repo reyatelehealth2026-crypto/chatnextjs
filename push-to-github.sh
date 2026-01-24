@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# =============================================================================
+# Push to GitHub Script - สคริปต์ Push Code ไป GitHub
+# =============================================================================
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+CHECK_MARK="${GREEN}✓${NC}"
+CROSS_MARK="${RED}✗${NC}"
+ARROW="${BLUE}➜${NC}"
+
+echo ""
+echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║${NC}  ${CYAN}Push to GitHub Script${NC}                                    ${BLUE}║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# Check if git is installed
+echo -e "${ARROW} ${CYAN}ตรวจสอบ Git...${NC}"
+if ! command -v git &> /dev/null; then
+    echo -e "${CROSS_MARK} Git ไม่ได้ติดตั้ง"
+    exit 1
+fi
+GIT_VERSION=$(git --version)
+echo -e "${CHECK_MARK} $GIT_VERSION"
+
+# Check if in git repository
+echo ""
+echo -e "${ARROW} ${CYAN}ตรวจสอบ Git Repository...${NC}"
+if [ ! -d ".git" ]; then
+    echo -e "${CROSS_MARK} ไม่ใช่ Git Repository"
+    echo -e "${ARROW} กำลัง initialize Git Repository..."
+    git init
+    echo -e "${CHECK_MARK} Initialize Git Repository เสร็จสิ้น"
+else
+    echo -e "${CHECK_MARK} พบ Git Repository"
+fi
+
+# Check git status
+echo ""
+echo -e "${ARROW} ${CYAN}ตรวจสอบสถานะ Git...${NC}"
+git status --short
+
+# Check if remote exists
+echo ""
+echo -e "${ARROW} ${CYAN}ตรวจสอบ Remote Repository...${NC}"
+if ! git remote | grep -q "origin"; then
+    echo -e "${YELLOW}⚠${NC} ยังไม่มี remote repository"
+    echo -e "${ARROW} กรุณาเพิ่ม remote repository:"
+    echo -e "  ${CYAN}git remote add origin https://github.com/USERNAME/REPO.git${NC}"
+    echo ""
+    read -p "$(echo -e ${CYAN}ต้องการเพิ่ม remote repository ตอนนี้หรือไม่? ${NC}[${GREEN}Y${NC}/n]: )" -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+        read -p "$(echo -e ${CYAN}GitHub Repository URL: ${NC})" REPO_URL
+        if [ -n "$REPO_URL" ]; then
+            git remote add origin "$REPO_URL"
+            echo -e "${CHECK_MARK} เพิ่ม remote repository เสร็จสิ้น"
+        fi
+    else
+        echo -e "${YELLOW}⚠${NC} ข้ามการเพิ่ม remote repository"
+        exit 1
+    fi
+else
+    REMOTE_URL=$(git remote get-url origin)
+    echo -e "${CHECK_MARK} Remote: $REMOTE_URL"
+fi
+
+# Add files
+echo ""
+echo -e "${ARROW} ${CYAN}กำลังเพิ่มไฟล์...${NC}"
+git add .
+echo -e "${CHECK_MARK} เพิ่มไฟล์เสร็จสิ้น"
+
+# Check if there are changes to commit
+if git diff --staged --quiet; then
+    echo -e "${YELLOW}⚠${NC} ไม่มีไฟล์ที่เปลี่ยนแปลง"
+else
+    # Commit
+    echo ""
+    echo -e "${ARROW} ${CYAN}กำลัง commit...${NC}"
+    read -p "$(echo -e ${CYAN}Commit message ${NC}[${GREEN}Update inbox-nextjs${NC}]: )" COMMIT_MSG
+    COMMIT_MSG=${COMMIT_MSG:-"Update inbox-nextjs"}
+    git commit -m "$COMMIT_MSG"
+    echo -e "${CHECK_MARK} Commit เสร็จสิ้น"
+fi
+
+# Push
+echo ""
+echo -e "${ARROW} ${CYAN}กำลัง push ไป GitHub...${NC}"
+read -p "$(echo -e ${CYAN}ต้องการ push ไป GitHub ตอนนี้หรือไม่? ${NC}[${GREEN}Y${NC}/n]: )" -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+    # Get current branch
+    CURRENT_BRANCH=$(git branch --show-current)
+    
+    echo ""
+    echo -e "${ARROW} ${CYAN}Pushing to origin/$CURRENT_BRANCH...${NC}"
+    git push -u origin "$CURRENT_BRANCH"
+    
+    echo ""
+    echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║${NC}  ${GREEN}🎉 Push สำเร็จ!${NC}                                           ${GREEN}║${NC}"
+    echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${ARROW} ${CYAN}ขั้นตอนต่อไป:${NC}"
+    echo -e "  1. ไปที่ GitHub เพื่อตรวจสอบ code"
+    echo -e "  2. ไปที่ Vercel Dashboard → Import Project จาก GitHub"
+    echo -e "  3. ตั้งค่า Environment Variables"
+    echo -e "  4. Deploy"
+    echo ""
+else
+    echo -e "${YELLOW}⚠${NC} ข้ามการ push"
+    echo -e "${ARROW} รันคำสั่งนี้เมื่อพร้อม: ${CYAN}git push -u origin main${NC}"
+fi
