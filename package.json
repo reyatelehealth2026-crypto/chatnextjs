@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "migrate:from-php": "tsx scripts/migrate-from-php.ts",
+    "migrate:line-accounts": "tsx scripts/migrate-line-accounts.ts",
     "test:auth": "tsx scripts/test-auth.ts",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop inbox-nextjs",

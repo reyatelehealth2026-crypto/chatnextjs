@@ -37,12 +37,16 @@ export function truncate(str: string, length: number): string {
 }
 
 export function getInitials(name: string): string {
-  if (!name) return '?'
-  const parts = name.split(' ')
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase()
+  if (name === null || name === undefined) return '?'
+  const safeName = String(name).trim()
+  if (!safeName) return '?'
+  const parts = safeName.split(/\s+/).filter(Boolean)
+  const first = parts[0]?.[0]
+  const second = parts[1]?.[0]
+  if (first && second) {
+    return `${first}${second}`.toUpperCase()
   }
-  return name.slice(0, 2).toUpperCase()
+  return safeName.slice(0, 2).toUpperCase()
 }
 
 export function generateId(): string {

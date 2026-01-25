@@ -3,18 +3,29 @@ import mysql from 'mysql2/promise'
 
 const prisma = new PrismaClient()
 
-// เชื่อมต่อกับ database PHP เดิม
-const phpDbConfig = {
-  host: process.env.PHP_DB_HOST || 'localhost',
-  user: process.env.PHP_DB_USER || 'root',
-  password: process.env.PHP_DB_PASSWORD || '',
-  database: process.env.PHP_DB_NAME || 'pharmacy_crm',
+// ใช้ DATABASE_URL เดียวกัน (เพราะใช้ database เดียวกัน)
+function parseDatabaseUrl(url: string) {
+  const match = url.match(/mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/)
+  if (!match) throw new Error('Invalid DATABASE_URL format')
+  return {
+    user: match[1],
+    password: match[2],
+    host: match[3],
+    port: parseInt(match[4]),
+    database: match[5],
+  }
 }
 
 async function migrateData() {
   console.log('🚀 Starting data migration from PHP system...\n')
 
-  const phpDb = await mysql.createConnection(phpDbConfig)
+  const dbUrl = process.env.DATABASE_URL
+  if (!dbUrl) {
+    throw new Error('DATABASE_URL environment variable is required')
+  }
+
+  const dbConfig = parseDatabaseUrl(dbUrl)
+  const phpDb = await mysql.createConnection(dbConfig)
 
   try {
     // 1. Migrate LINE Accounts
@@ -87,7 +98,7 @@ async function migrateData() {
     // 3. Migrate LINE Users (Customers)
     console.log('👥 Migrating LINE Users...')
     const [lineUsers] = await phpDb.query<any[]>(
-      'SELECT * FROM line_users ORDER BY created_at DESC LIMIT 1000'
+      'SELECT * FROM users ORDER BY created_at DESC LIMIT 1000'
     )
 
     let userCount = 0
@@ -102,16 +113,16 @@ async function migrateData() {
           },
           update: {
             displayName: user.display_name,
-            pictureUrl: user.picture_url,
-            statusMessage: user.status_message,
+            pictureUrl: null, // Skip picture_url to avoid length issues - will be synced from new messages
+            statusMessage: null, // Skip status_message to avoid length issues
             firstName: user.first_name,
             lastName: user.last_name,
             phone: user.phone,
             email: user.email,
             birthDate: user.birth_date,
             gender: user.gender,
-            weight: user.weight,
-            height: user.height,
+            weight: user.weight ? parseFloat(user.weight) : null,
+            height: user.height ? parseFloat(user.height) : null,
             address: user.address,
             district: user.district,
             province: user.province,
@@ -127,7 +138,7 @@ async function migrateData() {
             availablePoints: user.available_points || 0,
             usedPoints: user.used_points || 0,
             loyaltyPoints: user.loyalty_points || 0,
-            totalSpent: user.total_spent || 0,
+            totalSpent: parseFloat(user.total_spent) || 0,
             orderCount: user.order_count || 0,
             lastInteraction: user.last_interaction,
             chatStatus: user.chat_status,
@@ -136,16 +147,16 @@ async function migrateData() {
             lineAccountId: user.line_account_id,
             lineUserId: user.line_user_id,
             displayName: user.display_name,
-            pictureUrl: user.picture_url,
-            statusMessage: user.status_message,
+            pictureUrl: null, // Skip picture_url to avoid length issues - will be synced from new messages
+            statusMessage: null, // Skip status_message to avoid length issues
             firstName: user.first_name,
             lastName: user.last_name,
             phone: user.phone,
             email: user.email,
             birthDate: user.birth_date,
             gender: user.gender,
-            weight: user.weight,
-            height: user.height,
+            weight: user.weight ? parseFloat(user.weight) : null,
+            height: user.height ? parseFloat(user.height) : null,
             address: user.address,
             district: user.district,
             province: user.province,
@@ -161,7 +172,7 @@ async function migrateData() {
             availablePoints: user.available_points || 0,
             usedPoints: user.used_points || 0,
             loyaltyPoints: user.loyalty_points || 0,
-            totalSpent: user.total_spent || 0,
+            totalSpent: parseFloat(user.total_spent) || 0,
             orderCount: user.order_count || 0,
             lastInteraction: user.last_interaction,
             chatStatus: user.chat_status,
@@ -180,7 +191,7 @@ async function migrateData() {
     // 4. Migrate User Tags
     console.log('🏷️  Migrating User Tags...')
     const [tags] = await phpDb.query<any[]>(
-      'SELECT * FROM user_tags ORDER BY sort_order'
+      'SELECT * FROM user_tags ORDER BY id'
     )
 
     for (const tag of tags) {
@@ -212,9 +223,9 @@ async function migrateData() {
     // 5. Migrate Messages (recent only)
     console.log('💬 Migrating Recent Messages...')
     const [messages] = await phpDb.query<any[]>(
-      `SELECT m.*, lu.id as line_user_uuid 
+      `SELECT m.*, u.line_user_id, u.line_account_id
        FROM messages m
-       JOIN line_users lu ON m.user_id = lu.line_user_id AND m.line_account_id = lu.line_account_id
+       JOIN users u ON m.user_id = u.id
        WHERE m.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
        ORDER BY m.created_at DESC
        LIMIT 10000`
@@ -226,7 +237,7 @@ async function migrateData() {
         // Get the UUID of the user from our new database
         const user = await prisma.lineUser.findFirst({
           where: {
-            lineUserId: msg.user_id,
+            lineUserId: msg.line_user_id,
             lineAccountId: msg.line_account_id,
           },
         })
