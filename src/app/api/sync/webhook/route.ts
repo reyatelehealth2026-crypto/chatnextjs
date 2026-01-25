@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
+import { broadcastRealtimeEvent } from '@/lib/realtime'
 
 // This endpoint allows the old system (v1) to sync messages/events to the new system
 // Protected by INTERNAL_API_SECRET
@@ -126,21 +127,19 @@ async function handleSyncMessage(data: any) {
       }
     })
   } else {
-    // Update basic info if provided
-    if (displayName || safePictureUrl) {
-      await prisma.lineUser.update({
-        where: { id: user.id },
-        data: {
-          displayName: displayName || user.displayName,
-          pictureUrl: safePictureUrl || user.pictureUrl,
-          lastInteraction: new Date(timestamp || Date.now())
-        }
-      })
-    }
+    // Always update last interaction; optionally refresh profile fields
+    await prisma.lineUser.update({
+      where: { id: user.id },
+      data: {
+        displayName: displayName || user.displayName,
+        pictureUrl: safePictureUrl || user.pictureUrl,
+        lastInteraction: new Date(timestamp || Date.now())
+      }
+    })
   }
 
   // 3. Create Message
-  await prisma.message.create({
+  const createdMessage = await prisma.message.create({
     data: {
       lineAccountId: accountId as number,
       userId: user.id,
@@ -150,6 +149,28 @@ async function handleSyncMessage(data: any) {
       mediaUrl: mediaUrl || null,
       createdAt: timestamp ? new Date(timestamp) : new Date(),
       isRead: direction === 'outgoing' ? true : false
+    }
+  })
+
+  broadcastRealtimeEvent({
+    type: 'new_message',
+    timestamp: Date.now(),
+    data: {
+      conversationId: user.id,
+      message: {
+        id: createdMessage.id,
+        userId: createdMessage.userId,
+        direction: createdMessage.direction,
+        messageType: createdMessage.messageType,
+        content: createdMessage.content,
+        mediaUrl: createdMessage.mediaUrl,
+        metadata: createdMessage.metadata ? JSON.parse(createdMessage.metadata) : null,
+        isRead: createdMessage.isRead,
+        sentBy: createdMessage.sentBy,
+        replyToId: createdMessage.replyToId,
+        createdAt: createdMessage.createdAt.toISOString(),
+        updatedAt: createdMessage.updatedAt.toISOString()
+      }
     }
   })
 }
