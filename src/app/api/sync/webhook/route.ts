@@ -46,7 +46,8 @@ function normalizePictureUrl(value: unknown) {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   if (!trimmed) return null
-  return trimmed.length > 255 ? trimmed.slice(0, 255) : trimmed
+  // Prisma String defaults to varchar(191) in MySQL, keep it safe.
+  return trimmed.length > 191 ? trimmed.slice(0, 191) : trimmed
 }
 
 async function handleSyncMessage(data: any) {
@@ -155,9 +156,9 @@ async function handleSyncMessage(data: any) {
 
 async function handleSyncUser(data: any) {
   // Logic to sync user profile updates
-  const { lineUserId, ...updates } = data
+  const { lineUserId, pictureUrl, ...updates } = data
   if (!lineUserId) return
-  const safePictureUrl = normalizePictureUrl(updates?.pictureUrl)
+  const safePictureUrl = normalizePictureUrl(pictureUrl)
 
   // Need account ID to find user
   // This simplistic version assumes single account or needs lookup
