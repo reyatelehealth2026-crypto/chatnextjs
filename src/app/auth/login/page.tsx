@@ -4,6 +4,7 @@ import { useState, Suspense } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { MessageSquare, Loader2 } from 'lucide-react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -100,7 +101,7 @@ function LoginForm() {
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full bg-[#0F172A] hover:bg-[#1E293B]" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -110,6 +111,13 @@ function LoginForm() {
                 'เข้าสู่ระบบ'
               )}
             </Button>
+
+            <div className="text-center text-sm text-gray-500 mt-4">
+              ยังไม่มีบัญชี?{' '}
+              <Link href="/auth/register" className="text-green-600 hover:underline font-medium">
+                สมัครสมาชิก
+              </Link>
+            </div>
           </form>
         </CardContent>
       </Card>
