@@ -1632,7 +1632,7 @@ model LineUser {
   isRegistered    Boolean   @default(false) @map("is_registered")
   registeredAt    DateTime? @map("registered_at")
   isBlocked       Boolean   @default(false) @map("is_blocked")
-  membershipLevel String    @default("bronze") @map("membership_level")
+  membershipLevel users_membership_level @default(bronze) @map("membership_level")
   tier            String    @default("silver")
   points          Int       @default(0)
   totalPoints     Int       @default(0) @map("total_points")
