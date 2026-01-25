@@ -1,0 +1,141 @@
+import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
+
+// This endpoint allows the old system (v1) to sync messages/events to the new system
+// Protected by INTERNAL_API_SECRET
+
+export async function POST(request: NextRequest) {
+  try {
+    // 1. Check Authentication
+    const authHeader = request.headers.get('authorization')
+    const internalSecret = process.env.INTERNAL_API_SECRET || process.env.NEXTAUTH_SECRET
+
+    if (!authHeader || authHeader !== `Bearer ${internalSecret}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // 2. Parse Payload
+    const body = await request.json()
+    const { event, data } = body
+
+    if (!event || !data) {
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+    }
+
+    // 3. Handle Events
+    if (event === 'message') {
+      await handleSyncMessage(data)
+    } else if (event === 'user_update') {
+      await handleSyncUser(data)
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Sync webhook error:', error)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+async function handleSyncMessage(data: any) {
+  const {
+    lineUserId,
+    displayName,
+    pictureUrl,
+    direction, // 'incoming' | 'outgoing'
+    type,      // 'text' | 'image' | ...
+    content,
+    mediaUrl,
+    timestamp,
+    lineAccountId // optional, ID of the LINE account
+  } = data
+
+  if (!lineUserId) return
+
+  // 1. Resolve LineAccount
+  let accountId = lineAccountId
+  if (!accountId) {
+    const defaultAccount = await prisma.lineAccount.findFirst({
+      where: { isDefault: true }
+    })
+    accountId = defaultAccount?.id
+  }
+
+  if (!accountId) {
+    console.error('No LINE account found for sync')
+    return
+  }
+
+  // 2. Find or Create User
+  let user = await prisma.lineUser.findUnique({
+    where: {
+      lineAccountId_lineUserId: {
+        lineAccountId: accountId,
+        lineUserId: lineUserId
+      }
+    }
+  })
+
+  if (!user) {
+    user = await prisma.lineUser.create({
+      data: {
+        lineAccountId: accountId,
+        lineUserId: lineUserId,
+        displayName: displayName || 'Unknown',
+        pictureUrl: pictureUrl || null,
+        isRegistered: false,
+        lastInteraction: new Date(timestamp || Date.now())
+      }
+    })
+  } else {
+    // Update basic info if provided
+    if (displayName || pictureUrl) {
+      await prisma.lineUser.update({
+        where: { id: user.id },
+        data: {
+          displayName: displayName || user.displayName,
+          pictureUrl: pictureUrl || user.pictureUrl,
+          lastInteraction: new Date(timestamp || Date.now())
+        }
+      })
+    }
+  }
+
+  // 3. Create Message
+  await prisma.message.create({
+    data: {
+      lineAccountId: accountId,
+      userId: user.id,
+      direction: direction || 'incoming',
+      messageType: type || 'text',
+      content: content || null,
+      mediaUrl: mediaUrl || null,
+      createdAt: timestamp ? new Date(timestamp) : new Date(),
+      isRead: direction === 'outgoing' ? true : false
+    }
+  })
+}
+
+async function handleSyncUser(data: any) {
+  // Logic to sync user profile updates
+  const { lineUserId, ...updates } = data
+  if (!lineUserId) return
+
+  // Need account ID to find user
+  // This simplistic version assumes single account or needs lookup
+  // For now, we'll try to update across all accounts with this lineUserId (if multiple)
+  // or just the default one.
+  
+  const users = await prisma.lineUser.findMany({
+    where: { lineUserId }
+  })
+
+  for (const user of users) {
+    await prisma.lineUser.update({
+      where: { id: user.id },
+      data: {
+        ...updates,
+        updatedAt: new Date()
+      }
+    })
+  }
+}
