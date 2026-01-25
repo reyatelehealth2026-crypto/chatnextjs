@@ -31,13 +31,19 @@ export async function GET(request: NextRequest) {
         } catch {
           clearInterval(keepAliveInterval)
         }
-      }, 30000) // Send ping every 30 seconds
+      }, 25000) // Send ping every 25 seconds (before 30s timeout)
 
       // Cleanup on close
       request.signal.addEventListener('abort', () => {
         clearInterval(keepAliveInterval)
         controller.close()
       })
+
+      // Close after 4 minutes to prevent timeout
+      setTimeout(() => {
+        clearInterval(keepAliveInterval)
+        controller.close()
+      }, 240000) // 4 minutes
     },
   })
 

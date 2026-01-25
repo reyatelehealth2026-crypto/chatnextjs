@@ -7,6 +7,9 @@
   "functions": {
     "src/app/api/**/*.ts": {
       "maxDuration": 30
+    },
+    "src/app/api/inbox/realtime/route.ts": {
+      "maxDuration": 300
     }
   },
   "rewrites": [
