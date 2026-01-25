@@ -66,6 +66,7 @@ async function handleSyncMessage(data: any) {
 
   if (!lineUserId) return
   const safePictureUrl = normalizePictureUrl(pictureUrl)
+  const createdAt = timestamp ? new Date(timestamp) : new Date()
 
   // 1. Resolve LineAccount
   // Convert lineAccountId to integer if provided (it comes as string from JSON)
@@ -139,6 +140,21 @@ async function handleSyncMessage(data: any) {
   }
 
   // 3. Create Message
+  const existingMessage = await prisma.message.findFirst({
+    where: {
+      userId: user.id,
+      direction: direction || 'incoming',
+      messageType: type || 'text',
+      content: content || null,
+      mediaUrl: mediaUrl || null,
+      createdAt,
+    },
+  })
+
+  if (existingMessage) {
+    return
+  }
+
   const createdMessage = await prisma.message.create({
     data: {
       lineAccountId: accountId as number,
@@ -147,7 +163,7 @@ async function handleSyncMessage(data: any) {
       messageType: type || 'text',
       content: content || null,
       mediaUrl: mediaUrl || null,
-      createdAt: timestamp ? new Date(timestamp) : new Date(),
+      createdAt,
       isRead: direction === 'outgoing' ? true : false
     }
   })

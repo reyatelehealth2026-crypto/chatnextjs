@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { sendLineMessage } from '@/lib/php-bridge'
 
 export async function GET(request: NextRequest) {
   try {
@@ -115,6 +116,26 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    if (!process.env.PHP_API_URL) {
+      return NextResponse.json(
+        { error: 'PHP_API_URL is not configured' },
+        { status: 500 }
+      )
+    }
+
+    const sendResult = await sendLineMessage({
+      userId: user.lineUserId,
+      message: content,
+      type: messageType,
+    })
+
+    if (!sendResult.success) {
+      return NextResponse.json(
+        { error: sendResult.error || 'Failed to send message' },
+        { status: 502 }
+      )
     }
 
     // Create the message

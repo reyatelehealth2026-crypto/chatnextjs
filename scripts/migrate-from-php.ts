@@ -243,6 +243,22 @@ async function migrateData() {
         })
 
         if (user) {
+          const existing = await prisma.message.findFirst({
+            where: {
+              userId: user.id,
+              lineAccountId: msg.line_account_id,
+              direction: msg.direction,
+              messageType: msg.message_type,
+              content: msg.content || null,
+              mediaUrl: msg.media_url || null,
+              createdAt: msg.created_at,
+            },
+          })
+
+          if (existing) {
+            continue
+          }
+
           await prisma.message.create({
             data: {
               userId: user.id,
