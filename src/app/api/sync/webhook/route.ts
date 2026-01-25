@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
     const internalSecret = process.env.INTERNAL_API_SECRET || process.env.NEXTAUTH_SECRET
 
     if (!authHeader || authHeader !== `Bearer ${internalSecret}`) {
+      console.error('Sync webhook: Unauthorized - missing or invalid auth header')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -19,14 +20,19 @@ export async function POST(request: NextRequest) {
     const { event, data } = body
 
     if (!event || !data) {
+      console.error('Sync webhook: Invalid payload - missing event or data', { event, hasData: !!data })
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
+
+    console.log(`Sync webhook: Received ${event} event for user ${data.lineUserId}`)
 
     // 3. Handle Events
     if (event === 'message') {
       await handleSyncMessage(data)
     } else if (event === 'user_update') {
       await handleSyncUser(data)
+    } else {
+      console.warn(`Sync webhook: Unknown event type: ${event}`)
     }
 
     return NextResponse.json({ success: true })
@@ -52,24 +58,48 @@ async function handleSyncMessage(data: any) {
   if (!lineUserId) return
 
   // 1. Resolve LineAccount
-  let accountId = lineAccountId
+  // Convert lineAccountId to integer if provided (it comes as string from JSON)
+  let accountId: number | undefined = lineAccountId ? parseInt(String(lineAccountId), 10) : undefined
+  if (accountId && isNaN(accountId)) {
+    accountId = undefined
+  }
+
   if (!accountId) {
     const defaultAccount = await prisma.lineAccount.findFirst({
       where: { isDefault: true }
     })
     accountId = defaultAccount?.id
+    
+    // If still no account, try to get any active account
+    if (!accountId) {
+      const anyAccount = await prisma.lineAccount.findFirst({
+        where: { isActive: true }
+      })
+      accountId = anyAccount?.id
+    }
   }
 
   if (!accountId) {
-    console.error('No LINE account found for sync')
-    return
+    console.error(`No LINE account found for sync. lineUserId: ${lineUserId}, lineAccountId: ${lineAccountId}`)
+    // Try to create a default account if none exists
+    const newAccount = await prisma.lineAccount.create({
+      data: {
+        name: 'Default Account',
+        channelSecret: 'default',
+        channelAccessToken: 'default',
+        isDefault: true,
+        isActive: true
+      }
+    })
+    accountId = newAccount.id
+    console.log(`Created default LINE account with ID: ${accountId}`)
   }
 
   // 2. Find or Create User
   let user = await prisma.lineUser.findUnique({
     where: {
       lineAccountId_lineUserId: {
-        lineAccountId: accountId,
+        lineAccountId: accountId as number,
         lineUserId: lineUserId
       }
     }
@@ -78,7 +108,7 @@ async function handleSyncMessage(data: any) {
   if (!user) {
     user = await prisma.lineUser.create({
       data: {
-        lineAccountId: accountId,
+        lineAccountId: accountId as number,
         lineUserId: lineUserId,
         displayName: displayName || 'Unknown',
         pictureUrl: pictureUrl || null,
@@ -103,7 +133,7 @@ async function handleSyncMessage(data: any) {
   // 3. Create Message
   await prisma.message.create({
     data: {
-      lineAccountId: accountId,
+      lineAccountId: accountId as number,
       userId: user.id,
       direction: direction || 'incoming',
       messageType: type || 'text',
