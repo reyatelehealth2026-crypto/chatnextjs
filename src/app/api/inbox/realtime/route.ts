@@ -2,6 +2,10 @@ import { NextRequest } from 'next/server'
 import { auth } from '@/lib/auth'
 
 // SSE endpoint for real-time updates
+export const runtime = 'nodejs'
+export const maxDuration = 300
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   const session = await auth()
   if (!session?.user) {
