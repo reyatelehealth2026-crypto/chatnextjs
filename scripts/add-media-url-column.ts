@@ -98,13 +98,24 @@ async function addMissingColumns() {
   try {
     const changes: boolean[] = []
 
-    // เพิ่มคอลัมน์ media_url
-    const mediaUrlAdded = await checkAndAddColumn('media_url', 'TEXT')
-    changes.push(mediaUrlAdded)
+    // กำหนดคอลัมน์ทั้งหมดที่ต้องเช็คและเพิ่ม (ตาม Prisma schema)
+    const columnsToCheck = [
+      { name: 'media_url', type: 'TEXT' },
+      { name: 'metadata', type: 'LONGTEXT' },
+      { name: 'reply_to_id', type: 'INT NULL' },
+      { name: 'reply_token', type: 'VARCHAR(255) NULL' },
+      { name: 'sent_by', type: 'VARCHAR(255) NULL' },
+      { name: 'is_read', type: 'BOOLEAN DEFAULT FALSE' },
+      { name: 'message_type', type: 'VARCHAR(50)' },
+      { name: 'line_account_id', type: 'INT NULL' },
+      { name: 'updated_at', type: 'DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
+    ]
 
-    // เพิ่มคอลัมน์ metadata
-    const metadataAdded = await checkAndAddColumn('metadata', 'LONGTEXT')
-    changes.push(metadataAdded)
+    // เช็คและเพิ่มคอลัมน์ทั้งหมด
+    for (const column of columnsToCheck) {
+      const added = await checkAndAddColumn(column.name, column.type)
+      changes.push(added)
+    }
 
     if (changes.some(c => c)) {
       console.log('\n✨ Migration completed successfully!')
