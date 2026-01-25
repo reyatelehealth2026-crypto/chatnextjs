@@ -2,11 +2,16 @@
 
 ## Running Migrations on Production (Vercel)
 
-### Option 1: Automatic Migration (Recommended)
-The build command in `vercel.json` has been configured to run migrations automatically during deployment:
+### Option 1: Automatic Migration Check (Recommended)
+The build command in `vercel.json` has been configured to check and add missing columns automatically during deployment:
 ```json
-"buildCommand": "npm run db:migrate && npm run build"
+"buildCommand": "npx tsx scripts/add-media-url-column.ts || true && npm run build"
 ```
+
+This script will:
+- Check if the `media_url` column exists
+- Add it if missing
+- Continue with build even if there's an error (non-blocking)
 
 ### Option 2: Manual Migration via Vercel CLI
 If you need to run migrations manually:

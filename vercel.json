@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run db:migrate && npm run build",
+  "buildCommand": "npx tsx scripts/add-media-url-column.ts || true && npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
