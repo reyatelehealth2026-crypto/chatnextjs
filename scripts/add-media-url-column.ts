@@ -62,9 +62,7 @@ console.log('DATABASE_URL:', process.env.DATABASE_URL.substring(0, 30) + '...')
 
 const prisma = new PrismaClient()
 
-async function addMediaUrlColumn() {
-  console.log('🚀 Adding media_url column to messages table...\n')
-
+async function checkAndAddColumn(columnName: string, columnType: string) {
   try {
     // ตรวจสอบว่าคอลัมน์มีอยู่แล้วหรือไม่
     const result = await prisma.$queryRaw<Array<{ COLUMN_NAME: string }>>`
@@ -72,30 +70,56 @@ async function addMediaUrlColumn() {
       FROM INFORMATION_SCHEMA.COLUMNS 
       WHERE TABLE_SCHEMA = DATABASE()
       AND TABLE_NAME = 'messages' 
-      AND COLUMN_NAME = 'media_url'
+      AND COLUMN_NAME = ${columnName}
     `
 
     if (result.length > 0) {
-      console.log('✅ Column media_url already exists in messages table')
-      return
+      console.log(`✅ Column ${columnName} already exists in messages table`)
+      return false
     }
 
-    // เพิ่มคอลัมน์ media_url
-    console.log('📝 Adding media_url column...')
-    await prisma.$executeRaw`
-      ALTER TABLE \`messages\` ADD COLUMN \`media_url\` TEXT NULL
-    `
+    // เพิ่มคอลัมน์
+    console.log(`📝 Adding ${columnName} column...`)
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE \`messages\` ADD COLUMN \`${columnName}\` ${columnType} NULL`
+    )
 
-    console.log('✅ Successfully added media_url column to messages table')
+    console.log(`✅ Successfully added ${columnName} column to messages table`)
+    return true
   } catch (error) {
-    console.error('❌ Error adding media_url column:', error)
+    console.error(`❌ Error adding ${columnName} column:`, error)
+    throw error
+  }
+}
+
+async function addMissingColumns() {
+  console.log('🚀 Checking and adding missing columns to messages table...\n')
+
+  try {
+    const changes: boolean[] = []
+
+    // เพิ่มคอลัมน์ media_url
+    const mediaUrlAdded = await checkAndAddColumn('media_url', 'TEXT')
+    changes.push(mediaUrlAdded)
+
+    // เพิ่มคอลัมน์ metadata
+    const metadataAdded = await checkAndAddColumn('metadata', 'LONGTEXT')
+    changes.push(metadataAdded)
+
+    if (changes.some(c => c)) {
+      console.log('\n✨ Migration completed successfully!')
+    } else {
+      console.log('\n✨ All columns already exist, no changes needed.')
+    }
+  } catch (error) {
+    console.error('❌ Error during migration:', error)
     throw error
   } finally {
     await prisma.$disconnect()
   }
 }
 
-addMediaUrlColumn()
+addMissingColumns()
   .then(() => {
     console.log('\n✨ Migration check completed successfully!')
     process.exit(0)
