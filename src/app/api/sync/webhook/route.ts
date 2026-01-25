@@ -42,6 +42,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
+function normalizePictureUrl(value: unknown) {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return trimmed.length > 255 ? trimmed.slice(0, 255) : trimmed
+}
+
 async function handleSyncMessage(data: any) {
   const {
     lineUserId,
@@ -56,6 +63,7 @@ async function handleSyncMessage(data: any) {
   } = data
 
   if (!lineUserId) return
+  const safePictureUrl = normalizePictureUrl(pictureUrl)
 
   // 1. Resolve LineAccount
   // Convert lineAccountId to integer if provided (it comes as string from JSON)
@@ -111,19 +119,19 @@ async function handleSyncMessage(data: any) {
         lineAccountId: accountId as number,
         lineUserId: lineUserId,
         displayName: displayName || 'Unknown',
-        pictureUrl: pictureUrl || null,
+        pictureUrl: safePictureUrl,
         isRegistered: false,
         lastInteraction: new Date(timestamp || Date.now())
       }
     })
   } else {
     // Update basic info if provided
-    if (displayName || pictureUrl) {
+    if (displayName || safePictureUrl) {
       await prisma.lineUser.update({
         where: { id: user.id },
         data: {
           displayName: displayName || user.displayName,
-          pictureUrl: pictureUrl || user.pictureUrl,
+          pictureUrl: safePictureUrl || user.pictureUrl,
           lastInteraction: new Date(timestamp || Date.now())
         }
       })
@@ -149,6 +157,7 @@ async function handleSyncUser(data: any) {
   // Logic to sync user profile updates
   const { lineUserId, ...updates } = data
   if (!lineUserId) return
+  const safePictureUrl = normalizePictureUrl(updates?.pictureUrl)
 
   // Need account ID to find user
   // This simplistic version assumes single account or needs lookup
@@ -164,6 +173,7 @@ async function handleSyncUser(data: any) {
       where: { id: user.id },
       data: {
         ...updates,
+        ...(safePictureUrl ? { pictureUrl: safePictureUrl } : {}),
         updatedAt: new Date()
       }
     })
