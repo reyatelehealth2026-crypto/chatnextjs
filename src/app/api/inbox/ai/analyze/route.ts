@@ -25,6 +25,7 @@ export async function POST(request: Request) {
           ? { lineAccountId: session.user.lineAccountId }
           : {}),
       },
+      select: { id: true },
     })
 
     if (!user) {

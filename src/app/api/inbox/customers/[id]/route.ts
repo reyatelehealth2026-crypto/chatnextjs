@@ -29,13 +29,56 @@ export async function GET(
 
     const user = await prisma.lineUser.findFirst({
       where,
-      include: {
+      select: {
+        id: true,
+        lineUserId: true,
+        displayName: true,
+        pictureUrl: true,
+        statusMessage: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        email: true,
+        gender: true,
+        weight: true,
+        height: true,
+        address: true,
+        district: true,
+        province: true,
+        postalCode: true,
+        memberId: true,
+        membershipLevel: true,
+        tier: true,
+        points: true,
+        totalPoints: true,
+        availablePoints: true,
+        usedPoints: true,
+        loyaltyPoints: true,
+        totalSpent: true,
+        orderCount: true,
+        lastInteraction: true,
+        chatStatus: true,
+        isBlocked: true,
+        isRegistered: true,
+        createdAt: true,
+        updatedAt: true,
         tagAssignments: {
-          include: { tag: true },
+          select: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+                description: true,
+                tagType: true,
+                priority: true,
+              },
+            },
+          },
         },
         conversationAssignees: {
           where: { status: 'active' },
-          include: {
+          select: {
             admin: {
               select: {
                 id: true,
@@ -87,7 +130,7 @@ export async function GET(
           lastName: user.lastName,
           phone: user.phone,
           email: user.email,
-          birthDate: user.birthDate?.toISOString() || null,
+          birthDate: null,
           gender: user.gender,
           weight: user.weight,
           height: user.height,

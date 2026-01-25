@@ -126,17 +126,65 @@ export async function GET(request: NextRequest) {
     // Get users with their latest messages
     const users = await prisma.lineUser.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        lineUserId: true,
+        displayName: true,
+        pictureUrl: true,
+        statusMessage: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        email: true,
+        gender: true,
+        address: true,
+        province: true,
+        membershipLevel: true,
+        tier: true,
+        points: true,
+        totalSpent: true,
+        orderCount: true,
+        lastInteraction: true,
+        chatStatus: true,
+        isBlocked: true,
+        isRegistered: true,
+        createdAt: true,
+        updatedAt: true,
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 1,
+          select: {
+            id: true,
+            userId: true,
+            direction: true,
+            messageType: true,
+            content: true,
+            mediaUrl: true,
+            metadata: true,
+            isRead: true,
+            sentBy: true,
+            replyToId: true,
+            createdAt: true,
+            updatedAt: true,
+          },
         },
         tagAssignments: {
-          include: { tag: true },
+          select: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+                description: true,
+                tagType: true,
+                priority: true,
+              },
+            },
+          },
         },
         conversationAssignees: {
           where: { status: 'active' },
-          include: {
+          select: {
             admin: {
               select: {
                 id: true,
@@ -181,7 +229,7 @@ export async function GET(request: NextRequest) {
         lastName: user.lastName,
         phone: user.phone,
         email: user.email,
-        birthDate: user.birthDate?.toISOString() || null,
+        birthDate: null,
         gender: user.gender,
         address: user.address,
         province: user.province,

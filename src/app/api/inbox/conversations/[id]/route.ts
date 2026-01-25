@@ -38,7 +38,7 @@ export async function GET(
         tagAssignments: {
           include: { tag: true },
         },
-        conversationAssignees: {
+        conversationAssignments: {
           where: { status: 'active' },
           include: {
             admin: {
@@ -118,7 +118,7 @@ export async function GET(
         : null,
       unreadCount: user._count.messages,
       status: (user.chatStatus as any) || 'active',
-      assignees: user.conversationAssignees.map((a) => ({
+      assignees: user.conversationAssignments.map((a) => ({
         id: a.admin.id.toString(),
         username: a.admin.username,
         displayName: a.admin.displayName,
@@ -128,7 +128,7 @@ export async function GET(
       tags: user.tagAssignments.map((ta) => ({
         id: ta.tag.id.toString(),
         name: ta.tag.name,
-        color: ta.tag.color ?? '#3B82F6',
+        color: ta.tag.color,
         description: ta.tag.description,
         isAuto: ta.tag.tagType !== 'manual',
         sortOrder: ta.tag.priority ?? 0,

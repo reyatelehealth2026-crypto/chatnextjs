@@ -113,6 +113,11 @@ async function handleSyncMessage(data: any) {
         lineAccountId: accountId as number,
         lineUserId: lineUserId
       }
+    },
+    select: {
+      id: true,
+      displayName: true,
+      pictureUrl: true
     }
   })
 
@@ -125,6 +130,11 @@ async function handleSyncMessage(data: any) {
         pictureUrl: safePictureUrl,
         isRegistered: false,
         lastInteraction: new Date(timestamp || Date.now())
+      },
+      select: {
+        id: true,
+        displayName: true,
+        pictureUrl: true
       }
     })
   } else {
@@ -135,7 +145,8 @@ async function handleSyncMessage(data: any) {
         displayName: displayName || user.displayName,
         pictureUrl: safePictureUrl || user.pictureUrl,
         lastInteraction: new Date(timestamp || Date.now())
-      }
+      },
+      select: { id: true }
     })
   }
 
@@ -203,7 +214,8 @@ async function handleSyncUser(data: any) {
   // or just the default one.
   
   const users = await prisma.lineUser.findMany({
-    where: { lineUserId }
+    where: { lineUserId },
+    select: { id: true }
   })
 
   for (const user of users) {
@@ -213,7 +225,8 @@ async function handleSyncUser(data: any) {
         ...updates,
         ...(safePictureUrl ? { pictureUrl: safePictureUrl } : {}),
         updatedAt: new Date()
-      }
+      },
+      select: { id: true }
     })
   }
 }

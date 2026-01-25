@@ -173,6 +173,7 @@ export async function POST(request: NextRequest) {
     // Get the user to find their line account
     const user = await prisma.lineUser.findUnique({
       where: { id: parsedUserId },
+      select: { id: true, lineAccountId: true, lineUserId: true },
     })
 
     if (!user) {
@@ -230,6 +231,7 @@ export async function POST(request: NextRequest) {
     await prisma.lineUser.update({
       where: { id: parsedUserId },
       data: { lastInteraction: new Date() },
+      select: { id: true },
     })
 
     const responsePayload = {

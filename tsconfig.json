@@ -24,9 +24,10 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ]
+      ],
+      "@vitejs/plugin-react": ["./node_modules/@vitejs/plugin-react/dist/index.d.ts"]
     },
-    "types": ["vitest/globals", "@testing-library/jest-dom", "vite"],
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
     "target": "ES2017"
   },
   "include": [

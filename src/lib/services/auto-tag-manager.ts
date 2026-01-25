@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import type { AutoTagCondition, AutoTagTriggerType } from '@/types'
 
 interface AutoTagContext {
@@ -39,10 +40,16 @@ export class AutoTagManager {
     // Get user data for condition evaluation
     const user = await prisma.lineUser.findUnique({
       where: { id: userId },
-      include: {
-        tagAssignments: {
-          include: { tag: true },
-        },
+      select: {
+        id: true,
+        tier: true,
+        points: true,
+        totalSpent: true,
+        orderCount: true,
+        membershipLevel: true,
+        isRegistered: true,
+        gender: true,
+        province: true,
       },
     })
 
@@ -267,18 +274,30 @@ export class AutoTagManager {
     const day = today.getDate()
 
     // Find users with birthday today
-    const birthdayUsers = await prisma.lineUser.findMany({
-      where: {
-        lineAccountId: this.lineAccountId,
-        birthDate: {
-          not: null,
+    let birthdayUsers: Array<{ id: number; birthDate: Date | null }> = []
+    try {
+      birthdayUsers = await prisma.lineUser.findMany({
+        where: {
+          lineAccountId: this.lineAccountId,
+          birthDate: {
+            not: null,
+          },
         },
-      },
-      select: {
-        id: true,
-        birthDate: true,
-      },
-    })
+        select: {
+          id: true,
+          birthDate: true,
+        },
+      })
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2022') {
+        const column = String((error.meta as { column?: string } | undefined)?.column ?? '')
+        if (column.includes('birth_date') || error.message.includes('birth_date')) {
+          console.warn('Skipping birthday tags: birth_date column is missing.')
+          return 0
+        }
+      }
+      throw error
+    }
 
     let count = 0
     for (const user of birthdayUsers) {

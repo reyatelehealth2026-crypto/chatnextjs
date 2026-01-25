@@ -67,6 +67,12 @@ async function handleEvent(event: any) {
       lineUserId,
       lineAccountId: lineAccount.id,
     },
+    select: {
+      id: true,
+      lineAccountId: true,
+      displayName: true,
+      pictureUrl: true,
+    },
   })
 
   if (!user) {
@@ -78,6 +84,7 @@ async function handleEvent(event: any) {
         displayName: source.displayName || null,
         lastInteraction: new Date(),
       },
+      select: { id: true },
     })
 
     // Trigger auto-tagging for new follower
@@ -88,6 +95,7 @@ async function handleEvent(event: any) {
     await prisma.lineUser.update({
       where: { id: user.id },
       data: { lastInteraction: new Date() },
+      select: { id: true },
     })
   }
 
@@ -192,6 +200,7 @@ async function handleFollow(user: any, lineAccountId: number) {
   await prisma.lineUser.update({
     where: { id: user.id },
     data: { isBlocked: false },
+    select: { id: true },
   })
 
   // Trigger auto-tagging for follow
@@ -203,6 +212,7 @@ async function handleUnfollow(user: any) {
   await prisma.lineUser.update({
     where: { id: user.id },
     data: { isBlocked: true },
+    select: { id: true },
   })
 }
 
