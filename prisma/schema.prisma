@@ -1621,7 +1621,7 @@ model LineUser {
   phone           String?
   email           String?
   birthDate       DateTime? @map("birth_date")
-  gender          String?
+  gender          users_gender?
   weight          Float?
   height          Float?
   address         String?
@@ -1665,7 +1665,7 @@ model Message {
   id            Int      @id @default(autoincrement())
   lineAccountId Int?     @map("line_account_id")
   userId        Int      @map("user_id")
-  direction     String
+  direction     messages_direction
   messageType   String   @map("message_type")
   content       String?  @db.Text
   mediaUrl      String?  @map("media_url") @db.Text
