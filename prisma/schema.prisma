@@ -29,6 +29,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@map("inbox_auth_accounts")
 }
 
 model Session {
@@ -37,6 +38,7 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("inbox_auth_sessions")
 }
 
 model User {
@@ -48,6 +50,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   adminUser     AdminUser?
+  @@map("inbox_auth_users")
 }
 
 model VerificationToken {
@@ -56,6 +59,7 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+  @@map("inbox_auth_verification_tokens")
 }
 
 // LINE Account (Bot) model
@@ -81,7 +85,7 @@ model LineAccount {
   messages       Message[]
   userTags       UserTag[]
 
-  @@map("line_accounts")
+  @@map("inbox_line_accounts")
 }
 
 // Admin User model
@@ -110,7 +114,7 @@ model AdminUser {
 
   @@index([role])
   @@index([lineAccountId])
-  @@map("admin_users")
+  @@map("inbox_admin_users")
 }
 
 // Admin Bot Access permissions
@@ -131,7 +135,7 @@ model AdminBotAccess {
   lineAccount LineAccount @relation(fields: [lineAccountId], references: [id], onDelete: Cascade)
 
   @@unique([adminId, lineAccountId])
-  @@map("admin_bot_access")
+  @@map("inbox_admin_bot_access")
 }
 
 // Admin Activity Log
@@ -149,7 +153,7 @@ model AdminActivityLog {
 
   @@index([adminId])
   @@index([action])
-  @@map("admin_activity_log")
+  @@map("inbox_admin_activity_log")
 }
 
 // LINE User (Customer) model
@@ -200,7 +204,7 @@ model LineUser {
   @@index([lineAccountId])
   @@index([lastInteraction])
   @@index([chatStatus])
-  @@map("line_users")
+  @@map("inbox_line_users")
 }
 
 // Message model
@@ -229,7 +233,7 @@ model Message {
   @@index([userId])
   @@index([createdAt])
   @@index([direction, isRead])
-  @@map("messages")
+  @@map("inbox_messages")
 }
 
 // Conversation Assignment (Multi-assignee support)
@@ -250,7 +254,7 @@ model ConversationAssignment {
 
   @@unique([userId, adminId])
   @@index([status])
-  @@map("conversation_assignments")
+  @@map("inbox_conversation_assignments")
 }
 
 // User Tag model
@@ -271,7 +275,7 @@ model UserTag {
 
   @@unique([lineAccountId, name])
   @@index([lineAccountId])
-  @@map("user_tags")
+  @@map("inbox_user_tags")
 }
 
 // User Tag Assignment
@@ -288,7 +292,7 @@ model UserTagAssignment {
   admin AdminUser? @relation(fields: [assignedBy], references: [id])
 
   @@unique([userId, tagId])
-  @@map("user_tag_assignments")
+  @@map("inbox_user_tag_assignments")
 }
 
 // Auto Tag Rule
@@ -306,5 +310,5 @@ model AutoTagRule {
 
   @@index([triggerType])
   @@index([isActive])
-  @@map("auto_tag_rules")
+  @@map("inbox_auto_tag_rules")
 }
