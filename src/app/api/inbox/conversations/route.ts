@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
     // Build where clause
     const where: any = {}
 
-    if (session.user.lineAccountId) {
+    // Only restrict by lineAccountId for non-super_admin users
+    if (session.user.role !== 'super_admin' && session.user.lineAccountId) {
       where.lineAccountId = session.user.lineAccountId
     }
 
