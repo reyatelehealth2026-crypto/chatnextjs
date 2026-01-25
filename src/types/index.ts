@@ -23,11 +23,20 @@ export interface LineUser {
   email: string | null
   birthDate: string | null
   gender: string | null
+  weight?: number | null
+  height?: number | null
   address: string | null
+  district?: string | null
   province: string | null
+  postalCode?: string | null
+  memberId?: string | null
   membershipLevel: string
   tier: string
   points: number
+  totalPoints?: number
+  availablePoints?: number
+  usedPoints?: number
+  loyaltyPoints?: number
   totalSpent: number
   orderCount: number
   lastInteraction: string | null
@@ -35,7 +44,20 @@ export interface LineUser {
   isBlocked: boolean
   isRegistered: boolean
   createdAt: string
+  updatedAt?: string
   tags?: UserTag[]
+  notes?: CustomerNote[]
+}
+
+export interface CustomerNote {
+  id: string
+  userId: string
+  adminId: string
+  content: string
+  isPinned: boolean
+  createdAt: string
+  updatedAt: string
+  admin?: AdminUser
 }
 
 export interface AdminUser {
@@ -46,6 +68,18 @@ export interface AdminUser {
   avatarUrl: string | null
   role: 'super_admin' | 'admin' | 'pharmacist' | 'staff' | 'user'
   isActive: boolean
+}
+
+export interface CustomerProfile {
+  user: LineUser
+  tags: UserTag[]
+  assignees: AdminUser[]
+  points: {
+    total: number
+    available: number
+    used: number
+    loyalty: number
+  }
 }
 
 // Message types
@@ -140,6 +174,7 @@ export interface AutoTagCondition {
 export interface AutoTagRule {
   id: string
   tagId: string
+  ruleName?: string
   triggerType: AutoTagTriggerType
   conditions: AutoTagCondition[]
   isActive: boolean
@@ -168,7 +203,7 @@ export interface ApiError {
 
 // SSE Event types
 export interface SSEEvent {
-  type: 'new_message' | 'conversation_update' | 'typing' | 'read_receipt' | 'assignment_change'
+  type: 'new_message' | 'conversation_update' | 'typing' | 'read_receipt' | 'assignment_change' | 'ping'
   data: unknown
   timestamp: number
 }

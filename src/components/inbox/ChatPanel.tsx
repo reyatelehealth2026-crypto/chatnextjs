@@ -1,10 +1,13 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Paperclip, Smile, MoreVertical, Phone, Video, Image as ImageIcon } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import Image from 'next/image'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { Send, Paperclip, Smile, MoreVertical, Phone, Video, Image as ImageIcon, Sparkles, X } from 'lucide-react'
 import { useMessages, useSendMessage } from '@/hooks/use-messages'
 import { useConversation } from '@/hooks/use-conversations'
 import { useTypingIndicator } from '@/hooks/use-realtime'
+import { useAiReply, useAiDraft, useAiAnalyzeImage } from '@/hooks/use-ai'
 import { useInboxStore } from '@/stores/inbox'
 import { useChatStore } from '@/stores/chat'
 import { Button } from '@/components/ui/button'
@@ -12,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useToast } from '@/hooks/use-toast'
 import { cn, formatMessageTime, getInitials } from '@/lib/utils'
 import type { Message } from '@/types'
 
@@ -44,12 +48,17 @@ function MessageBubble({ message, isLast }: { message: Message; isLast: boolean 
         )}
 
         {message.messageType === 'image' && message.mediaUrl && (
-          <img
-            src={message.mediaUrl}
-            alt="Image"
-            className="max-w-full rounded-lg"
-            loading="lazy"
-          />
+          <div className="relative w-full max-w-[280px] sm:max-w-[360px]">
+            <Image
+              src={message.mediaUrl}
+              alt="Image"
+              width={640}
+              height={480}
+              sizes="(max-width: 640px) 70vw, 360px"
+              className="h-auto w-full rounded-lg"
+              loading="lazy"
+            />
+          </div>
         )}
 
         {message.messageType === 'sticker' && message.metadata && (
@@ -143,10 +152,17 @@ function ChatHeader({ conversation }: { conversation: any }) {
   )
 }
 
-function MessageComposer({ userId }: { userId: string }) {
+function MessageComposer({ userId, latestImageUrl }: { userId: string; latestImageUrl?: string | null }) {
   const [message, setMessage] = useState('')
+  const [aiResult, setAiResult] = useState('')
+  const [aiTone, setAiTone] = useState('friendly')
+  const [isAiOpen, setIsAiOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const sendMessage = useSendMessage()
+  const aiReply = useAiReply()
+  const aiDraft = useAiDraft()
+  const aiAnalyze = useAiAnalyzeImage()
+  const { toast } = useToast()
   const { startTyping, stopTyping } = useTypingIndicator(userId)
 
   const handleSend = useCallback(async () => {
@@ -183,8 +199,95 @@ function MessageComposer({ userId }: { userId: string }) {
     [startTyping]
   )
 
+  const handleAiReply = useCallback(async () => {
+    try {
+      const result = await aiReply.mutateAsync({ userId, tone: aiTone })
+      setAiResult(result.text)
+      setIsAiOpen(true)
+    } catch (error) {
+      toast({ title: 'AI ตอบกลับล้มเหลว', description: 'กรุณาลองใหม่อีกครั้ง' })
+    }
+  }, [aiReply, aiTone, toast, userId])
+
+  const handleAiDraft = useCallback(async () => {
+    try {
+      const result = await aiDraft.mutateAsync({ userId, tone: aiTone })
+      setAiResult(result.text)
+      setIsAiOpen(true)
+    } catch (error) {
+      toast({ title: 'AI Draft ล้มเหลว', description: 'กรุณาลองใหม่อีกครั้ง' })
+    }
+  }, [aiDraft, aiTone, toast, userId])
+
+  const handleAiAnalyze = useCallback(async () => {
+    if (!latestImageUrl) {
+      toast({ title: 'ไม่มีรูปภาพล่าสุด', description: 'ไม่พบรูปภาพในบทสนทนานี้' })
+      return
+    }
+    try {
+      const result = await aiAnalyze.mutateAsync({ userId, imageUrl: latestImageUrl })
+      setAiResult(result.text)
+      setIsAiOpen(true)
+    } catch (error) {
+      toast({ title: 'วิเคราะห์รูปภาพล้มเหลว', description: 'กรุณาลองใหม่อีกครั้ง' })
+    }
+  }, [aiAnalyze, latestImageUrl, toast, userId])
+
+  const isAiBusy = aiReply.isPending || aiDraft.isPending || aiAnalyze.isPending
+
   return (
     <div className="p-4 border-t bg-card">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <Button size="sm" variant="secondary" onClick={handleAiReply} disabled={isAiBusy}>
+          <Sparkles className="h-4 w-4 mr-1" />
+          AI Reply
+        </Button>
+        <Button size="sm" variant="outline" onClick={handleAiDraft} disabled={isAiBusy}>
+          Ghost Draft
+        </Button>
+        <Button size="sm" variant="outline" onClick={handleAiAnalyze} disabled={isAiBusy}>
+          วิเคราะห์รูป
+        </Button>
+        <select
+          className="h-8 rounded-md border bg-background px-2 text-xs"
+          value={aiTone}
+          onChange={(e) => setAiTone(e.target.value)}
+        >
+          <option value="friendly">เป็นมิตร</option>
+          <option value="professional">มืออาชีพ</option>
+          <option value="empathetic">เห็นใจ</option>
+        </select>
+      </div>
+
+      {isAiOpen && (
+        <div className="mb-3 rounded-lg border bg-muted/40 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">AI Draft</span>
+            <Button variant="ghost" size="icon" onClick={() => setIsAiOpen(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <Textarea
+            value={aiResult}
+            onChange={(e) => setAiResult(e.target.value)}
+            className="min-h-[80px]"
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setMessage(aiResult)}
+              disabled={!aiResult.trim()}
+            >
+              ใส่ในข้อความ
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAiResult('')}>
+              ล้าง
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-end gap-2">
         <Button variant="ghost" size="icon" className="flex-shrink-0">
           <Paperclip className="h-5 w-5" />
@@ -233,6 +336,7 @@ function EmptyChat() {
 
 export function ChatPanel() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const parentRef = useRef<HTMLDivElement>(null)
   const { selectedConversationId } = useInboxStore()
   const { getTypingUsers } = useChatStore()
 
@@ -240,14 +344,38 @@ export function ChatPanel() {
   const { data: messagesData, isLoading } = useMessages(selectedConversationId)
 
   const messages = messagesData?.data || []
+  const latestImageUrl = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i]
+      if (msg.messageType === 'image' && msg.mediaUrl) {
+        return msg.mediaUrl
+      }
+    }
+    return null
+  }, [messages])
   const typingUsers = selectedConversationId
     ? getTypingUsers(selectedConversationId)
     : []
+  const hasTypingIndicator = typingUsers.length > 0
+  const totalRowCount = messages.length + (hasTypingIndicator ? 1 : 0)
+
+  const rowVirtualizer = useVirtualizer({
+    count: totalRowCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 72,
+    overscan: 8,
+    getItemKey: (index) =>
+      index < messages.length ? messages[index].id : 'typing-indicator',
+    measureElement: (el) => el.getBoundingClientRect().height,
+  })
 
   // Auto scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (!parentRef.current || totalRowCount === 0) return
+    requestAnimationFrame(() => {
+      rowVirtualizer.scrollToIndex(totalRowCount - 1, { align: 'end' })
+    })
+  }, [rowVirtualizer, totalRowCount])
 
   if (!selectedConversationId) {
     return <EmptyChat />
@@ -257,9 +385,9 @@ export function ChatPanel() {
     <div className="flex flex-col h-full bg-background">
       <ChatHeader conversation={conversation} />
 
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea ref={parentRef} className="flex-1">
         {isLoading ? (
-          <div className="space-y-4">
+          <div className="space-y-4 p-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
@@ -279,21 +407,59 @@ export function ChatPanel() {
             <p className="text-sm">เริ่มการสนทนาโดยส่งข้อความแรก</p>
           </div>
         ) : (
-          <>
-            {messages.map((msg, index) => (
-              <MessageBubble
-                key={msg.id}
-                message={msg}
-                isLast={index === messages.length - 1}
-              />
-            ))}
-            <TypingIndicator names={typingUsers.map((u) => u.name)} />
+          <div
+            style={{
+              height: rowVirtualizer.getTotalSize(),
+              width: '100%',
+              position: 'relative',
+              padding: '16px',
+              boxSizing: 'content-box',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              if (virtualRow.index === messages.length) {
+                return (
+                  <div
+                    key="typing-indicator"
+                    ref={rowVirtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <TypingIndicator names={typingUsers.map((u) => u.name)} />
+                  </div>
+                )
+              }
+              const msg = messages[virtualRow.index]
+              return (
+                <div
+                  key={msg.id}
+                  ref={rowVirtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <MessageBubble
+                    message={msg}
+                    isLast={virtualRow.index === messages.length - 1}
+                  />
+                </div>
+              )
+            })}
             <div ref={messagesEndRef} />
-          </>
+          </div>
         )}
       </ScrollArea>
 
-      <MessageComposer userId={selectedConversationId} />
+      <MessageComposer userId={selectedConversationId} latestImageUrl={latestImageUrl} />
     </div>
   )
 }

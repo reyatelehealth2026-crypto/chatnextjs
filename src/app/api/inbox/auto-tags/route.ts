@@ -13,9 +13,10 @@ export async function GET(request: NextRequest) {
     const rules = await prisma.autoTagRule.findMany({
       where: session.user.lineAccountId
         ? {
-            tag: {
-              lineAccountId: session.user.lineAccountId,
-            },
+            OR: [
+              { lineAccountId: session.user.lineAccountId },
+              { lineAccountId: null },
+            ],
           }
         : {},
       include: {
@@ -26,16 +27,17 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: rules.map((rule) => ({
-        id: rule.id,
-        tagId: rule.tagId,
+        id: rule.id.toString(),
+        tagId: rule.tagId.toString(),
+        ruleName: rule.ruleName,
         triggerType: rule.triggerType,
         conditions: JSON.parse(rule.conditions),
         isActive: rule.isActive,
         priority: rule.priority,
         tag: {
-          id: rule.tag.id,
+          id: rule.tag.id.toString(),
           name: rule.tag.name,
-          color: rule.tag.color,
+          color: rule.tag.color ?? '#3B82F6',
         },
         createdAt: rule.createdAt.toISOString(),
         updatedAt: rule.updatedAt.toISOString(),
@@ -59,12 +61,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Check admin permissions
-    if (!['super_admin', 'admin'].includes(session.user.role)) {
+    if (!['super_admin', 'admin'].includes(session.user.role as string)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
-    const { tagId, triggerType, conditions, priority = 0 } = body
+    const { tagId, triggerType, conditions, priority = 0, ruleName } = body
 
     if (!tagId || !triggerType) {
       return NextResponse.json(
@@ -73,9 +75,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const parsedTagId = Number(tagId)
+    if (!Number.isFinite(parsedTagId)) {
+      return NextResponse.json({ error: 'tagId must be a number' }, { status: 400 })
+    }
+
+    const tag = await prisma.userTag.findFirst({
+      where: {
+        id: parsedTagId,
+        ...(session.user.lineAccountId ? { lineAccountId: session.user.lineAccountId } : {}),
+      },
+    })
+
+    if (!tag) {
+      return NextResponse.json({ error: 'Tag not found' }, { status: 404 })
+    }
+
     const rule = await prisma.autoTagRule.create({
       data: {
-        tagId,
+        tagId: parsedTagId,
+        lineAccountId: session.user.lineAccountId,
+        ruleName: ruleName || tag.name,
         triggerType,
         conditions: JSON.stringify(conditions || []),
         priority,
@@ -87,16 +107,17 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({
-      id: rule.id,
-      tagId: rule.tagId,
+      id: rule.id.toString(),
+      tagId: rule.tagId.toString(),
+      ruleName: rule.ruleName,
       triggerType: rule.triggerType,
       conditions: JSON.parse(rule.conditions),
       isActive: rule.isActive,
       priority: rule.priority,
       tag: {
-        id: rule.tag.id,
+        id: rule.tag.id.toString(),
         name: rule.tag.name,
-        color: rule.tag.color,
+        color: rule.tag.color ?? '#3B82F6',
       },
     })
   } catch (error) {
@@ -116,20 +137,26 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!['super_admin', 'admin'].includes(session.user.role)) {
+    if (!['super_admin', 'admin'].includes(session.user.role as string)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
-    const { id, conditions, isActive, priority } = body
+    const { id, conditions, isActive, priority, ruleName } = body
 
     if (!id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 })
     }
 
+    const parsedId = Number(id)
+    if (!Number.isFinite(parsedId)) {
+      return NextResponse.json({ error: 'id must be a number' }, { status: 400 })
+    }
+
     const rule = await prisma.autoTagRule.update({
-      where: { id },
+      where: { id: parsedId },
       data: {
+        ...(ruleName !== undefined && { ruleName }),
         ...(conditions !== undefined && { conditions: JSON.stringify(conditions) }),
         ...(isActive !== undefined && { isActive }),
         ...(priority !== undefined && { priority }),
@@ -140,16 +167,17 @@ export async function PUT(request: NextRequest) {
     })
 
     return NextResponse.json({
-      id: rule.id,
-      tagId: rule.tagId,
+      id: rule.id.toString(),
+      tagId: rule.tagId.toString(),
+      ruleName: rule.ruleName,
       triggerType: rule.triggerType,
       conditions: JSON.parse(rule.conditions),
       isActive: rule.isActive,
       priority: rule.priority,
       tag: {
-        id: rule.tag.id,
+        id: rule.tag.id.toString(),
         name: rule.tag.name,
-        color: rule.tag.color,
+        color: rule.tag.color ?? '#3B82F6',
       },
     })
   } catch (error) {
@@ -169,7 +197,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!['super_admin', 'admin'].includes(session.user.role)) {
+    if (!['super_admin', 'admin'].includes(session.user.role as string)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -180,8 +208,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'id is required' }, { status: 400 })
     }
 
+    const parsedId = Number(id)
+    if (!Number.isFinite(parsedId)) {
+      return NextResponse.json({ error: 'id must be a number' }, { status: 400 })
+    }
+
     await prisma.autoTagRule.delete({
-      where: { id },
+      where: { id: parsedId },
     })
 
     return NextResponse.json({ success: true })

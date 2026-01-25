@@ -4,9 +4,13 @@ import { devtools, persist } from 'zustand/middleware'
 export interface ConversationFilters {
   status?: 'all' | 'active' | 'pending' | 'resolved'
   tagId?: string
+  tagIds?: string[]
   assignedTo?: string
+  assignedToIds?: string[]
   search?: string
   unreadOnly?: boolean
+  startDate?: string
+  endDate?: string
 }
 
 interface InboxState {
@@ -23,6 +27,7 @@ interface InboxState {
   // Actions
   setSelectedConversation: (id: string | null) => void
   setFilters: (filters: Partial<ConversationFilters>) => void
+  setAllFilters: (filters: ConversationFilters) => void
   resetFilters: () => void
   toggleSidebar: () => void
   toggleProfile: () => void
@@ -33,9 +38,13 @@ interface InboxState {
 const defaultFilters: ConversationFilters = {
   status: 'all',
   tagId: undefined,
+  tagIds: undefined,
   assignedTo: undefined,
+  assignedToIds: undefined,
   search: '',
   unreadOnly: false,
+  startDate: undefined,
+  endDate: undefined,
 }
 
 export const useInboxStore = create<InboxState>()(
@@ -60,6 +69,9 @@ export const useInboxStore = create<InboxState>()(
             false,
             'setFilters'
           ),
+
+        setAllFilters: (filters) =>
+          set({ filters }, false, 'setAllFilters'),
 
         resetFilters: () =>
           set({ filters: defaultFilters }, false, 'resetFilters'),

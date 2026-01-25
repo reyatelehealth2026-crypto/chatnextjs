@@ -17,13 +17,26 @@ export async function GET(request: NextRequest) {
 
   const stream = new ReadableStream({
     start(controller) {
+      let removeClient = () => {}
+      let keepAliveInterval: ReturnType<typeof setInterval> | null = null
+
+      const closeStream = () => {
+        removeClient()
+        if (keepAliveInterval) {
+          clearInterval(keepAliveInterval)
+        }
+        controller.close()
+      }
+
       const client = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         send: (event: { type: string; data: unknown; timestamp: number }) => {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
         },
       }
-      const removeClient = addRealtimeClient(client)
+      removeClient = addRealtimeClient(client)
+
+      controller.enqueue(encoder.encode('retry: 5000\n\n'))
 
       // Send initial connection message
       client.send({
@@ -33,7 +46,7 @@ export async function GET(request: NextRequest) {
       })
 
       // Keep-alive interval
-      const keepAliveInterval = setInterval(() => {
+      keepAliveInterval = setInterval(() => {
         try {
           client.send({
             type: 'ping',
@@ -41,23 +54,18 @@ export async function GET(request: NextRequest) {
             timestamp: Date.now(),
           })
         } catch {
-          removeClient()
-          clearInterval(keepAliveInterval)
+          closeStream()
         }
       }, 25000) // Send ping every 25 seconds (before 30s timeout)
 
       // Cleanup on close
       request.signal.addEventListener('abort', () => {
-        removeClient()
-        clearInterval(keepAliveInterval)
-        controller.close()
+        closeStream()
       })
 
       // Close after 4 minutes to prevent timeout
       setTimeout(() => {
-        removeClient()
-        clearInterval(keepAliveInterval)
-        controller.close()
+        closeStream()
       }, 240000) // 4 minutes
     },
   })
@@ -65,8 +73,9 @@ export async function GET(request: NextRequest) {
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
     },
   })
 }

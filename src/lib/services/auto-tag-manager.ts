@@ -2,7 +2,7 @@ import prisma from '@/lib/prisma'
 import type { AutoTagCondition, AutoTagTriggerType } from '@/types'
 
 interface AutoTagContext {
-  userId: string
+  userId: number
   lineAccountId: number
   triggerType: AutoTagTriggerType
   data?: Record<string, any>
@@ -26,9 +26,7 @@ export class AutoTagManager {
       where: {
         triggerType,
         isActive: true,
-        tag: {
-          lineAccountId: this.lineAccountId,
-        },
+        lineAccountId: this.lineAccountId,
       },
       include: {
         tag: true,
@@ -139,7 +137,7 @@ export class AutoTagManager {
   /**
    * Assign a tag to a user
    */
-  async assignTag(userId: string, tagId: string, isAuto: boolean = false): Promise<void> {
+  async assignTag(userId: number, tagId: number, isAuto: boolean = false): Promise<void> {
     await prisma.userTagAssignment.upsert({
       where: {
         userId_tagId: { userId, tagId },
@@ -147,10 +145,12 @@ export class AutoTagManager {
       create: {
         userId,
         tagId,
-        isAuto,
+        assignedBy: isAuto ? 'auto' : 'manual',
+        assignedReason: isAuto ? 'auto_tag' : undefined,
       },
       update: {
-        isAuto,
+        assignedBy: isAuto ? 'auto' : 'manual',
+        assignedReason: isAuto ? 'auto_tag' : undefined,
       },
     })
   }
@@ -158,7 +158,7 @@ export class AutoTagManager {
   /**
    * Remove a tag from a user
    */
-  async removeTag(userId: string, tagId: string): Promise<void> {
+  async removeTag(userId: number, tagId: number): Promise<void> {
     await prisma.userTagAssignment.deleteMany({
       where: { userId, tagId },
     })
@@ -167,7 +167,7 @@ export class AutoTagManager {
   /**
    * Process on_follow trigger
    */
-  async onFollow(userId: string): Promise<void> {
+  async onFollow(userId: number): Promise<void> {
     await this.processAutoTags({
       userId,
       lineAccountId: this.lineAccountId,
@@ -178,7 +178,7 @@ export class AutoTagManager {
   /**
    * Process on_message trigger
    */
-  async onMessage(userId: string, messageContent: string): Promise<void> {
+  async onMessage(userId: number, messageContent: string): Promise<void> {
     await this.processAutoTags({
       userId,
       lineAccountId: this.lineAccountId,
@@ -190,7 +190,7 @@ export class AutoTagManager {
   /**
    * Process on_order trigger
    */
-  async onOrder(userId: string, orderData: { amount: number; items: string[] }): Promise<void> {
+  async onOrder(userId: number, orderData: { amount: number; items: string[] }): Promise<void> {
     await this.processAutoTags({
       userId,
       lineAccountId: this.lineAccountId,
@@ -205,7 +205,7 @@ export class AutoTagManager {
   /**
    * Process on_tier_upgrade trigger
    */
-  async onTierUpgrade(userId: string, newTier: string, oldTier: string): Promise<void> {
+  async onTierUpgrade(userId: number, newTier: string, oldTier: string): Promise<void> {
     await this.processAutoTags({
       userId,
       lineAccountId: this.lineAccountId,
@@ -220,7 +220,7 @@ export class AutoTagManager {
   /**
    * Process on_points_milestone trigger
    */
-  async onPointsMilestone(userId: string, points: number): Promise<void> {
+  async onPointsMilestone(userId: number, points: number): Promise<void> {
     await this.processAutoTags({
       userId,
       lineAccountId: this.lineAccountId,

@@ -195,6 +195,75 @@ pm2 delete inbox-nextjs
 pm2 start npm --name "inbox-nextjs" -- start
 ```
 
+### 10. Monitoring & Alerts
+
+#### Health Check Endpoint
+The system includes a health check API at `/api/health` that monitors database connectivity.
+
+#### Automated Monitoring
+Use the `monitor-alerts.sh` script to check system status and send alerts.
+
+```bash
+# Give execution permission
+chmod +x monitor-alerts.sh
+
+# Run manually
+./monitor-alerts.sh
+
+# Setup cron job (every 5 minutes)
+*/5 * * * * cd /var/www/inbox-nextjs && ./monitor-alerts.sh >> /var/log/inbox-monitor.log 2>&1
+```
+
+#### Logs Aggregation
+PM2 logs are stored in the `logs/` directory. You can use tools like `logrotate` to manage them.
+
+```bash
+# Example logrotate config
+/var/www/inbox-nextjs/logs/*.log {
+    daily
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 root root
+}
+```
+
+## Rollout & Staged Migration
+
+### 1. Alpha Testing (Internal)
+- Deploy Next.js inbox on a development/staging server.
+- Connect to a copy of the production database.
+- Internal team tests all features.
+
+### 2. Beta Testing (Staged Rollout)
+- Deploy Next.js inbox alongside production PHP system.
+- Route only specific users/admins to `/inbox` using Nginx map or cookie-based routing.
+
+Example Nginx cookie-based routing:
+```nginx
+map $cookie_use_nextjs $inbox_backend {
+    default http://localhost:80; # PHP
+    "true"  http://localhost:3000; # Next.js
+}
+
+location /inbox {
+    proxy_pass $inbox_backend/inbox;
+    # ... other proxy settings ...
+}
+```
+
+### 3. Full Production Rollout
+- Update Nginx to route all `/inbox` requests to Next.js.
+- Keep PHP system running as a fallback (accessible via a different path if needed).
+
+### 4. Rollback Plan
+If critical issues are found in Next.js:
+1. Revert Nginx configuration to route `/inbox` back to the PHP system.
+2. Reload Nginx: `sudo systemctl reload nginx`.
+3. Investigate logs: `pm2 logs inbox-nextjs`.
+
 ## Performance Optimization
 
 ### 1. Enable Redis Caching

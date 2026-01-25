@@ -2,8 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { UserTag } from '@/types'
-
-const TAGS_KEY = 'tags'
+import { queryKeys } from '@/lib/query-keys'
 
 interface TagWithCount extends UserTag {
   usageCount: number
@@ -11,7 +10,7 @@ interface TagWithCount extends UserTag {
 
 export function useTags() {
   return useQuery({
-    queryKey: [TAGS_KEY],
+    queryKey: queryKeys.tags(),
     queryFn: async () => {
       const response = await fetch('/api/inbox/tags')
       if (!response.ok) throw new Error('Failed to fetch tags')
@@ -36,7 +35,7 @@ export function useCreateTag() {
       return response.json() as Promise<UserTag>
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [TAGS_KEY] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags() })
     },
   })
 }
@@ -53,7 +52,7 @@ export function useDeleteTag() {
       return response.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [TAGS_KEY] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags() })
     },
   })
 }
@@ -72,8 +71,8 @@ export function useAssignTag() {
       return response.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [TAGS_KEY] })
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversationsRoot() })
     },
   })
 }
@@ -92,8 +91,8 @@ export function useRemoveTag() {
       return response.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [TAGS_KEY] })
-      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversationsRoot() })
     },
   })
 }

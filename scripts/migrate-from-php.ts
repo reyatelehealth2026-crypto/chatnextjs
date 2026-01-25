@@ -205,16 +205,16 @@ async function migrateData() {
         update: {
           color: tag.color,
           description: tag.description,
-          isAuto: tag.is_auto === 1,
-          sortOrder: tag.sort_order,
+          tagType: tag.is_auto === 1 ? 'auto' : 'manual',
+          priority: tag.sort_order,
         },
         create: {
           lineAccountId: tag.line_account_id,
           name: tag.name,
           color: tag.color,
           description: tag.description,
-          isAuto: tag.is_auto === 1,
-          sortOrder: tag.sort_order,
+          tagType: tag.is_auto === 1 ? 'auto' : 'manual',
+          priority: tag.sort_order,
         },
       })
     }

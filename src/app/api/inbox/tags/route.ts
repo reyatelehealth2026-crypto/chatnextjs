@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       where: session.user.lineAccountId
         ? { lineAccountId: session.user.lineAccountId }
         : {},
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      orderBy: [{ priority: 'asc' }, { name: 'asc' }],
       include: {
         _count: {
           select: { assignments: true },
@@ -24,12 +24,12 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: tags.map((tag) => ({
-        id: tag.id,
+        id: tag.id.toString(),
         name: tag.name,
-        color: tag.color,
+        color: tag.color ?? '#3B82F6',
         description: tag.description,
-        isAuto: tag.isAuto,
-        sortOrder: tag.sortOrder,
+        isAuto: tag.tagType !== 'manual',
+        sortOrder: tag.priority ?? 0,
         usageCount: tag._count.assignments,
       })),
     })
@@ -59,17 +59,19 @@ export async function POST(request: NextRequest) {
         name,
         color,
         description,
+        tagType: 'manual',
+        priority: 0,
         lineAccountId: session.user.lineAccountId,
       },
     })
 
     return NextResponse.json({
-      id: tag.id,
+      id: tag.id.toString(),
       name: tag.name,
-      color: tag.color,
+      color: tag.color ?? '#3B82F6',
       description: tag.description,
-      isAuto: tag.isAuto,
-      sortOrder: tag.sortOrder,
+      isAuto: tag.tagType !== 'manual',
+      sortOrder: tag.priority ?? 0,
     })
   } catch (error) {
     console.error('Error creating tag:', error)
@@ -95,22 +97,30 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    const parsedUserId = Number(userId)
+    const parsedTagId = Number(tagId)
+    if (!Number.isFinite(parsedUserId) || !Number.isFinite(parsedTagId)) {
+      return NextResponse.json(
+        { error: 'userId and tagId must be numbers' },
+        { status: 400 }
+      )
+    }
+
     if (action === 'assign') {
       await prisma.userTagAssignment.upsert({
         where: {
-          userId_tagId: { userId, tagId },
+          userId_tagId: { userId: parsedUserId, tagId: parsedTagId },
         },
         create: {
-          userId,
-          tagId,
-          assignedBy: session.user.id,
-          isAuto: false,
+          userId: parsedUserId,
+          tagId: parsedTagId,
+          assignedBy: session.user.id?.toString() || 'manual',
         },
         update: {},
       })
     } else if (action === 'remove') {
       await prisma.userTagAssignment.deleteMany({
-        where: { userId, tagId },
+        where: { userId: parsedUserId, tagId: parsedTagId },
       })
     }
 
@@ -139,8 +149,13 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'tagId is required' }, { status: 400 })
     }
 
+    const parsedTagId = Number(tagId)
+    if (!Number.isFinite(parsedTagId)) {
+      return NextResponse.json({ error: 'tagId must be a number' }, { status: 400 })
+    }
+
     await prisma.userTag.delete({
-      where: { id: tagId },
+      where: { id: parsedTagId },
     })
 
     return NextResponse.json({ success: true })

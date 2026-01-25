@@ -2,12 +2,11 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type { AutoTagRule, AutoTagCondition, AutoTagTriggerType } from '@/types'
-
-const AUTO_TAGS_KEY = 'auto-tags'
+import { queryKeys } from '@/lib/query-keys'
 
 export function useAutoTagRules() {
   return useQuery({
-    queryKey: [AUTO_TAGS_KEY],
+    queryKey: queryKeys.autoTags(),
     queryFn: async () => {
       const response = await fetch('/api/inbox/auto-tags')
       if (!response.ok) throw new Error('Failed to fetch auto-tag rules')
@@ -37,7 +36,7 @@ export function useCreateAutoTagRule() {
       return response.json() as Promise<AutoTagRule>
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [AUTO_TAGS_KEY] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.autoTags() })
     },
   })
 }
@@ -61,7 +60,7 @@ export function useUpdateAutoTagRule() {
       return response.json() as Promise<AutoTagRule>
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [AUTO_TAGS_KEY] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.autoTags() })
     },
   })
 }
@@ -78,7 +77,7 @@ export function useDeleteAutoTagRule() {
       return response.json()
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [AUTO_TAGS_KEY] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.autoTags() })
     },
   })
 }

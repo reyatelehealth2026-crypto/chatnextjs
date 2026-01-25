@@ -1,9 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { SSEEvent, NewMessageEvent, ConversationUpdateEvent, TypingEvent } from '@/types'
 import { useChatStore } from '@/stores/chat'
+import { useRealtimeStore } from '@/stores/realtime'
+import { queryKeys } from '@/lib/query-keys'
 
 interface UseRealtimeOptions {
   onNewMessage?: (event: NewMessageEvent) => void
@@ -17,9 +19,36 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
   const queryClient = useQueryClient()
   const eventSourceRef = useRef<EventSource | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const [isConnected, setIsConnected] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const lastEventAtRef = useRef<number | null>(null)
+  const reconnectAttemptsRef = useRef(0)
+  const connectRef = useRef<() => void>(() => {})
   const { addTypingUser, removeTypingUser } = useChatStore()
+  const {
+    isConnected,
+    error,
+    setConnected,
+    setError,
+    setLastEventAt,
+    setReconnectAttempts,
+  } = useRealtimeStore()
+
+  const scheduleReconnect = useCallback((reason: string) => {
+    if (!enabled) return
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current)
+    }
+
+    const attempts = reconnectAttemptsRef.current + 1
+    reconnectAttemptsRef.current = attempts
+    setReconnectAttempts(attempts)
+
+    const delay = Math.min(30000, 1000 * 2 ** Math.min(attempts, 5))
+    console.warn(`SSE reconnect scheduled (${reason}) in ${delay}ms`)
+    reconnectTimeoutRef.current = setTimeout(() => {
+      connectRef.current()
+    }, delay)
+  }, [enabled, setReconnectAttempts])
 
   const connect = useCallback(() => {
     if (!enabled || eventSourceRef.current) return
@@ -29,27 +58,35 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       eventSourceRef.current = eventSource
 
       eventSource.onopen = () => {
-        setIsConnected(true)
+        setConnected(true)
         setError(null)
+        reconnectAttemptsRef.current = 0
+        setReconnectAttempts(0)
+        lastEventAtRef.current = Date.now()
+        setLastEventAt(lastEventAtRef.current)
         console.log('SSE connected')
       }
 
       eventSource.onmessage = (event) => {
         try {
+          lastEventAtRef.current = Date.now()
+          setLastEventAt(lastEventAtRef.current)
           const data: SSEEvent = JSON.parse(event.data)
 
           switch (data.type) {
             case 'new_message':
               const messageEvent = data.data as NewMessageEvent
               // Invalidate queries
-              queryClient.invalidateQueries({ queryKey: ['messages', messageEvent.conversationId] })
-              queryClient.invalidateQueries({ queryKey: ['conversations'] })
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.messagesForUser(messageEvent.conversationId),
+              })
+              queryClient.invalidateQueries({ queryKey: queryKeys.conversationsRoot() })
               onNewMessage?.(messageEvent)
               break
 
             case 'conversation_update':
               const updateEvent = data.data as ConversationUpdateEvent
-              queryClient.invalidateQueries({ queryKey: ['conversations'] })
+              queryClient.invalidateQueries({ queryKey: queryKeys.conversationsRoot() })
               onConversationUpdate?.(updateEvent)
               break
 
@@ -66,8 +103,20 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
               }
               onTyping?.(typingEvent)
               break
+            
+            case 'read_receipt':
+              const readEvent = data.data as { conversationId: string }
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.messagesForUser(readEvent.conversationId),
+              })
+              queryClient.invalidateQueries({ queryKey: queryKeys.conversationsRoot() })
+              break
 
-            case 'ping' as any:
+            case 'assignment_change':
+              queryClient.invalidateQueries({ queryKey: queryKeys.conversationsRoot() })
+              break
+
+            case 'ping':
               // Keep-alive ping, ignore
               break
 
@@ -81,21 +130,31 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
       eventSource.onerror = (err) => {
         console.error('SSE error:', err)
-        setIsConnected(false)
+        setConnected(false)
         setError('Connection lost')
         eventSource.close()
         eventSourceRef.current = null
 
-        // Reconnect after 5 seconds
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connect()
-        }, 5000)
+        scheduleReconnect('error')
       }
     } catch (err) {
       console.error('Failed to connect SSE:', err)
       setError('Failed to connect')
     }
-  }, [enabled, queryClient, onNewMessage, onConversationUpdate, onTyping, addTypingUser, removeTypingUser])
+  }, [
+    enabled,
+    queryClient,
+    onNewMessage,
+    onConversationUpdate,
+    onTyping,
+    addTypingUser,
+    removeTypingUser,
+    setConnected,
+    setError,
+    setLastEventAt,
+    setReconnectAttempts,
+    scheduleReconnect,
+  ])
 
   const disconnect = useCallback(() => {
     if (eventSourceRef.current) {
@@ -106,10 +165,16 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       clearTimeout(reconnectTimeoutRef.current)
       reconnectTimeoutRef.current = null
     }
-    setIsConnected(false)
-  }, [])
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current)
+      heartbeatIntervalRef.current = null
+    }
+    setConnected(false)
+    setLastEventAt(null)
+  }, [setConnected, setLastEventAt])
 
   useEffect(() => {
+    connectRef.current = connect
     if (enabled) {
       connect()
     } else {
@@ -120,6 +185,45 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       disconnect()
     }
   }, [enabled, connect, disconnect])
+
+  useEffect(() => {
+    if (!enabled || !eventSourceRef.current) return
+
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current)
+    }
+
+    heartbeatIntervalRef.current = setInterval(() => {
+      if (!eventSourceRef.current) return
+      const lastEventAt = lastEventAtRef.current
+      if (!lastEventAt) return
+      if (Date.now() - lastEventAt > 45000) {
+        console.warn('SSE heartbeat timeout, reconnecting')
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+        setConnected(false)
+        scheduleReconnect('heartbeat')
+      }
+    }, 15000)
+
+    return () => {
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current)
+        heartbeatIntervalRef.current = null
+      }
+    }
+  }, [enabled, setConnected, scheduleReconnect])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleOnline = () => {
+      if (!eventSourceRef.current) {
+        scheduleReconnect('online')
+      }
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [scheduleReconnect])
 
   return {
     isConnected,

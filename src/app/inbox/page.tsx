@@ -1,16 +1,32 @@
 "use client"
 
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Menu, X, ArrowLeft } from 'lucide-react'
 import { ConversationList } from '@/components/inbox/ConversationList'
 import { ChatPanel } from '@/components/inbox/ChatPanel'
-import { CustomerProfile } from '@/components/inbox/CustomerProfile'
 import { useRealtime } from '@/hooks/use-realtime'
+import { useInboxFilterSync } from '@/hooks/use-inbox-filter-sync'
 import { useInboxStore } from '@/stores/inbox'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+
+const CustomerProfile = dynamic(
+  () => import('@/components/inbox/CustomerProfile').then((mod) => mod.CustomerProfile),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-80 border-l bg-card p-4 space-y-4">
+        <div className="h-20 w-20 rounded-full bg-muted mx-auto" />
+        <div className="h-5 w-32 bg-muted mx-auto rounded" />
+        <div className="h-4 w-24 bg-muted mx-auto rounded" />
+        <div className="h-24 w-full bg-muted rounded" />
+      </div>
+    ),
+  }
+)
 
 export default function InboxPage() {
   const { data: session, status } = useSession()
@@ -26,6 +42,8 @@ export default function InboxPage() {
   
   const [isMobile, setIsMobile] = useState(false)
   const [mobileView, setMobileView] = useState<'list' | 'chat' | 'profile'>('list')
+
+  useInboxFilterSync()
 
   // Detect mobile viewport
   useEffect(() => {

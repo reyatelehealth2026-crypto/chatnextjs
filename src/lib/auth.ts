@@ -61,7 +61,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           })
 
           return {
-            id: adminUser.id,
+            id: adminUser.id.toString(),
             email: adminUser.email,
             name: adminUser.displayName || adminUser.username,
             image: adminUser.avatarUrl,
@@ -78,16 +78,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id
-        token.role = (user as any).role
-        token.lineAccountId = (user as any).lineAccountId
+        token.id = String(user.id)
+        token.role = user.role
+        token.lineAccountId = user.lineAccountId
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string
-        session.user.role = token.role as string
+        session.user.id = String(token.id)
+        session.user.role = token.role as string | null
         session.user.lineAccountId = token.lineAccountId as number | null
       }
       return session
@@ -98,7 +98,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 // Type augmentation for next-auth
 declare module "next-auth" {
   interface User {
-    role?: string
+    role?: string | null
     lineAccountId?: number | null
   }
   interface Session {
@@ -106,9 +106,10 @@ declare module "next-auth" {
       id: string
       email: string
       name: string
-      image?: string
-      role: string
+      image?: string | null
+      role?: string | null
       lineAccountId: number | null
     }
   }
 }
+

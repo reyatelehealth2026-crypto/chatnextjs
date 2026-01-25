@@ -1,9 +1,11 @@
 "use client"
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Search, Filter, MessageSquare, RefreshCw } from 'lucide-react'
 import { useConversations } from '@/hooks/use-conversations'
+import { useTags } from '@/hooks/use-tags'
+import { useAdmins } from '@/hooks/use-admins'
 import { useInboxStore } from '@/stores/inbox'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -11,9 +13,9 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Label } from '@/components/ui/label'
 import { cn, formatTimeAgo, truncate, getInitials } from '@/lib/utils'
 import type { Conversation } from '@/types'
-import { useRef } from 'react'
 
 function ConversationItem({
   conversation,
@@ -111,33 +113,38 @@ function ConversationSkeleton() {
 export function ConversationList() {
   const parentRef = useRef<HTMLDivElement>(null)
   const [searchInput, setSearchInput] = useState('')
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
   
   const { 
     selectedConversationId, 
     setSelectedConversation,
     filters,
-    setFilters 
+    setFilters,
+    resetFilters
   } = useInboxStore()
 
   const { data, isLoading, isError, refetch, isFetching } = useConversations()
+  const { data: tags = [] } = useTags()
+  const { data: admins = [] } = useAdmins()
 
   const conversations = useMemo(() => {
     return data?.data || []
   }, [data])
 
-  const filteredConversations = useMemo(() => {
-    if (!searchInput) return conversations
-    
-    const search = searchInput.toLowerCase()
-    return conversations.filter((c) => {
-      const name = (c.user.displayName || c.user.firstName || '').toLowerCase()
-      const phone = (c.user.phone || '').toLowerCase()
-      return name.includes(search) || phone.includes(search)
-    })
-  }, [conversations, searchInput])
+  const activeTagIds = useMemo(() => {
+    if (filters.tagIds && filters.tagIds.length > 0) return filters.tagIds
+    if (filters.tagId) return [filters.tagId]
+    return []
+  }, [filters.tagId, filters.tagIds])
+
+  const assignedAdminLabel = useMemo(() => {
+    if (!filters.assignedTo) return null
+    const admin = admins.find((item) => item.id === filters.assignedTo)
+    return admin?.displayName || admin?.username || 'ผู้ดูแล'
+  }, [admins, filters.assignedTo])
 
   const rowVirtualizer = useVirtualizer({
-    count: filteredConversations.length,
+    count: conversations.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 88,
     overscan: 5,
@@ -146,6 +153,20 @@ export function ConversationList() {
   const handleSearch = useCallback((value: string) => {
     setSearchInput(value)
   }, [])
+
+  useEffect(() => {
+    setSearchInput(filters.search || '')
+  }, [filters.search])
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (searchInput !== (filters.search || '')) {
+        setFilters({ search: searchInput })
+      }
+    }, 350)
+
+    return () => clearTimeout(timeout)
+  }, [filters.search, searchInput, setFilters])
 
   const handleSelectConversation = useCallback((id: string) => {
     setSelectedConversation(id)
@@ -165,14 +186,23 @@ export function ConversationList() {
               </Badge>
             )}
           </h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => refetch()}
-            disabled={isFetching}
-          >
-            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant={isFilterOpen ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setIsFilterOpen((open) => !open)}
+            >
+              <Filter className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+            </Button>
+          </div>
         </div>
 
         {/* Search */}
@@ -186,9 +216,144 @@ export function ConversationList() {
           />
         </div>
 
+        {/* Filter panel */}
+        {isFilterOpen && (
+          <div className="border rounded-lg p-3 space-y-3 bg-muted/40">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">ตัวกรอง</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  resetFilters()
+                  setSearchInput('')
+                }}
+              >
+                ล้างตัวกรอง
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="status-filter">สถานะ</Label>
+                <select
+                  id="status-filter"
+                  className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                  value={filters.status || 'all'}
+                  onChange={(e) => setFilters({ status: e.target.value as any })}
+                >
+                  <option value="all">ทั้งหมด</option>
+                  <option value="active">กำลังคุย</option>
+                  <option value="pending">รอดำเนินการ</option>
+                  <option value="resolved">เสร็จสิ้น</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="assignee-filter">ผู้ดูแล</Label>
+                <select
+                  id="assignee-filter"
+                  className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                  value={filters.assignedTo || ''}
+                  onChange={(e) =>
+                    setFilters({
+                      assignedTo: e.target.value || undefined,
+                      assignedToIds: undefined,
+                    })
+                  }
+                >
+                  <option value="">ทั้งหมด</option>
+                  {admins.map((admin) => (
+                    <option key={admin.id} value={admin.id}>
+                      {admin.displayName || admin.username}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label>แท็ก</Label>
+              <div className="flex flex-wrap gap-2">
+                {tags.map((tag) => {
+                  const isActive = activeTagIds.includes(tag.id)
+                  return (
+                    <button
+                      key={tag.id}
+                      onClick={() => {
+                        const next = isActive
+                          ? activeTagIds.filter((id) => id !== tag.id)
+                          : [...activeTagIds, tag.id]
+                        setFilters({ tagIds: next.length > 0 ? next : undefined, tagId: undefined })
+                      }}
+                      className={cn(
+                        'text-xs px-2 py-1 rounded-full border transition-colors',
+                        isActive ? 'bg-primary text-primary-foreground' : 'bg-background'
+                      )}
+                      style={!isActive ? { borderColor: tag.color, color: tag.color } : undefined}
+                    >
+                      {tag.name}
+                    </button>
+                  )
+                })}
+                {tags.length === 0 && (
+                  <span className="text-xs text-muted-foreground">ไม่มีแท็ก</span>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="start-date">วันที่เริ่มต้น</Label>
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={filters.startDate || ''}
+                  onChange={(e) => setFilters({ startDate: e.target.value || undefined })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="end-date">วันที่สิ้นสุด</Label>
+                <Input
+                  id="end-date"
+                  type="date"
+                  value={filters.endDate || ''}
+                  onChange={(e) => setFilters({ endDate: e.target.value || undefined })}
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={filters.unreadOnly || false}
+                onChange={(e) => setFilters({ unreadOnly: e.target.checked })}
+              />
+              เฉพาะที่ยังไม่ได้อ่าน
+            </label>
+          </div>
+        )}
+
         {/* Filter badges */}
-        {(filters.status !== 'all' || filters.tagId) && (
+        {(filters.status !== 'all' ||
+          activeTagIds.length > 0 ||
+          filters.search ||
+          filters.assignedTo ||
+          filters.unreadOnly ||
+          filters.startDate ||
+          filters.endDate) && (
           <div className="flex items-center gap-2 flex-wrap">
+            {filters.search && (
+              <Badge variant="secondary" className="gap-1">
+                ค้นหา: {filters.search}
+                <button
+                  onClick={() => setFilters({ search: '' })}
+                  className="ml-1 hover:text-destructive"
+                >
+                  ×
+                </button>
+              </Badge>
+            )}
             {filters.status && filters.status !== 'all' && (
               <Badge variant="secondary" className="gap-1">
                 สถานะ: {filters.status}
@@ -200,11 +365,44 @@ export function ConversationList() {
                 </button>
               </Badge>
             )}
-            {filters.tagId && (
+            {activeTagIds.length > 0 && (
               <Badge variant="secondary" className="gap-1">
-                แท็ก
+                แท็ก: {activeTagIds.length}
                 <button
-                  onClick={() => setFilters({ tagId: undefined })}
+                  onClick={() => setFilters({ tagId: undefined, tagIds: undefined })}
+                  className="ml-1 hover:text-destructive"
+                >
+                  ×
+                </button>
+              </Badge>
+            )}
+            {filters.assignedTo && (
+              <Badge variant="secondary" className="gap-1">
+                ผู้ดูแล: {assignedAdminLabel || 'ผู้ดูแล'}
+                <button
+                  onClick={() => setFilters({ assignedTo: undefined, assignedToIds: undefined })}
+                  className="ml-1 hover:text-destructive"
+                >
+                  ×
+                </button>
+              </Badge>
+            )}
+            {filters.unreadOnly && (
+              <Badge variant="secondary" className="gap-1">
+                ยังไม่อ่าน
+                <button
+                  onClick={() => setFilters({ unreadOnly: false })}
+                  className="ml-1 hover:text-destructive"
+                >
+                  ×
+                </button>
+              </Badge>
+            )}
+            {(filters.startDate || filters.endDate) && (
+              <Badge variant="secondary" className="gap-1">
+                ช่วงเวลา
+                <button
+                  onClick={() => setFilters({ startDate: undefined, endDate: undefined })}
                   className="ml-1 hover:text-destructive"
                 >
                   ×
@@ -230,7 +428,7 @@ export function ConversationList() {
               ลองใหม่
             </Button>
           </div>
-        ) : filteredConversations.length === 0 ? (
+        ) : conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
             <MessageSquare className="h-12 w-12 mb-2 opacity-50" />
             <p>ไม่พบการสนทนา</p>
@@ -244,7 +442,7 @@ export function ConversationList() {
             }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const conversation = filteredConversations[virtualRow.index]
+              const conversation = conversations[virtualRow.index]
               return (
                 <div
                   key={conversation.id}

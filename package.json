@@ -8,6 +8,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "vitest",
+    "test:unit": "vitest run src/tests/unit",
+    "test:integration": "vitest run src/tests/integration",
+    "test:e2e": "playwright test",
+    "test:perf": "playwright test e2e/perf.spec.ts",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
@@ -21,7 +26,8 @@
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop inbox-nextjs",
     "pm2:restart": "pm2 restart inbox-nextjs",
-    "pm2:logs": "pm2 logs inbox-nextjs"
+    "pm2:logs": "pm2 logs inbox-nextjs",
+    "monitor": "./monitor-alerts.sh"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -39,8 +45,10 @@
     "@radix-ui/react-switch": "^1.1.2",
     "@radix-ui/react-tabs": "^1.1.2",
     "@radix-ui/react-toast": "^1.2.4",
+    "@tanstack/query-sync-storage-persister": "^5.90.22",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-query-devtools": "^5.62.0",
+    "@tanstack/react-query-persist-client": "^5.90.22",
     "@tanstack/react-virtual": "^3.11.2",
     "bcryptjs": "^2.4.3",
     "class-variance-authority": "^0.7.1",
@@ -56,18 +64,25 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.6.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^5.1.2",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.16.0",
     "eslint-config-next": "^15.1.0",
+    "jsdom": "^25.0.1",
     "mysql2": "^3.11.5",
     "postcss": "^8.4.49",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }
