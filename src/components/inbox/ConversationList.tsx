@@ -39,7 +39,14 @@ function ConversationItem({
       )}
     >
       <Avatar className="h-10 w-10 flex-shrink-0">
-        <AvatarImage src={user.pictureUrl || undefined} alt={user.displayName || 'User'} />
+        <AvatarImage 
+          src={user.pictureUrl || undefined} 
+          alt={user.displayName || 'User'} 
+          onError={(e) => {
+            // Fallback for LINE CDN 400 errors
+            console.warn('Failed to load profile image, using fallback');
+          }}
+        />
         <AvatarFallback>{getInitials(user.displayName || 'U')}</AvatarFallback>
       </Avatar>
 
@@ -446,6 +453,7 @@ export function ConversationList() {
               return (
                 <div
                   key={conversation.id}
+                  data-index={virtualRow.index}
                   style={{
                     position: 'absolute',
                     top: 0,

@@ -22,21 +22,25 @@ export async function POST(request: NextRequest) {
     const { userId, adminId } = body
 
     if (!userId) {
+      console.error('Assignment error: userId is missing')
       return NextResponse.json({ error: 'userId is required' }, { status: 400 })
     }
 
     const parsedUserId = Number(userId)
     if (!Number.isFinite(parsedUserId)) {
+      console.error('Assignment error: userId is not a number', userId)
       return NextResponse.json({ error: 'userId must be a number' }, { status: 400 })
     }
 
     const sessionAdminId = Number(session.user.id)
     if (!Number.isFinite(sessionAdminId)) {
+      console.error('Assignment error: session admin id is not a number', session.user.id)
       return NextResponse.json({ error: 'Invalid session admin id' }, { status: 400 })
     }
 
     const targetAdminId = adminId !== undefined && adminId !== null ? Number(adminId) : sessionAdminId
     if (!Number.isFinite(targetAdminId)) {
+      console.error('Assignment error: target admin id is not a number', adminId)
       return NextResponse.json({ error: 'adminId must be a number' }, { status: 400 })
     }
 
@@ -90,9 +94,15 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Error assigning conversation:', error)
+    console.error('Error assigning conversation:', error instanceof Error ? error.message : error)
+    if (error instanceof Error) {
+      console.error('Stack trace:', error.stack)
+    }
     return NextResponse.json(
-      { error: 'Failed to assign conversation' },
+      { 
+        error: 'Failed to assign conversation', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
       { status: 500 }
     )
   }
@@ -146,9 +156,12 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error unassigning conversation:', error)
+    console.error('Error unassigning conversation:', error instanceof Error ? error.message : error)
     return NextResponse.json(
-      { error: 'Failed to unassign conversation' },
+      { 
+        error: 'Failed to unassign conversation', 
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
       { status: 500 }
     )
   }

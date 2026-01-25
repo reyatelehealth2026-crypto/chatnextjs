@@ -63,7 +63,13 @@ Draft:`
 
     return NextResponse.json({ text })
   } catch (error) {
-    console.error('AI draft error:', error)
-    return NextResponse.json({ error: 'Failed to generate draft' }, { status: 500 })
+    console.error('AI draft error:', error instanceof Error ? error.message : error)
+    if (error instanceof Error) {
+      console.error('Stack trace:', error.stack)
+    }
+    return NextResponse.json({ 
+      error: 'Failed to generate draft', 
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    }, { status: 500 })
   }
 }

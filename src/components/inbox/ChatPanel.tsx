@@ -21,6 +21,7 @@ import type { Message } from '@/types'
 
 function MessageBubble({ message, isLast }: { message: Message; isLast: boolean }) {
   const isOutgoing = message.direction === 'outgoing'
+  const [imageError, setImageError] = useState(false)
 
   return (
     <div
@@ -49,15 +50,23 @@ function MessageBubble({ message, isLast }: { message: Message; isLast: boolean 
 
         {message.messageType === 'image' && message.mediaUrl && (
           <div className="relative w-full max-w-[280px] sm:max-w-[360px]">
-            <Image
-              src={message.mediaUrl}
-              alt="Image"
-              width={640}
-              height={480}
-              sizes="(max-width: 640px) 70vw, 360px"
-              className="h-auto w-full rounded-lg"
-              loading="lazy"
-            />
+            {!imageError ? (
+              <Image
+                src={message.mediaUrl}
+                alt="Image"
+                width={640}
+                height={480}
+                sizes="(max-width: 640px) 70vw, 360px"
+                className="h-auto w-full rounded-lg"
+                loading="lazy"
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center p-4 border rounded-lg bg-muted text-muted-foreground">
+                <ImageIcon className="h-8 w-8 mb-2 opacity-50" />
+                <span className="text-xs">ไม่สามารถโหลดรูปภาพได้</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -120,7 +129,12 @@ function ChatHeader({ conversation }: { conversation: any }) {
     <div className="flex items-center justify-between p-4 border-b bg-card">
       <div className="flex items-center gap-3">
         <Avatar className="h-10 w-10">
-          <AvatarImage src={user.pictureUrl || undefined} />
+          <AvatarImage 
+            src={user.pictureUrl || undefined} 
+            onError={(e) => {
+              console.warn('Failed to load header profile image');
+            }}
+          />
           <AvatarFallback>{getInitials(user.displayName || 'U')}</AvatarFallback>
         </Avatar>
         <div>
@@ -422,6 +436,7 @@ export function ChatPanel() {
                   <div
                     key="typing-indicator"
                     ref={rowVirtualizer.measureElement}
+                    data-index={virtualRow.index}
                     style={{
                       position: 'absolute',
                       top: 0,
@@ -439,6 +454,7 @@ export function ChatPanel() {
                 <div
                   key={msg.id}
                   ref={rowVirtualizer.measureElement}
+                  data-index={virtualRow.index}
                   style={{
                     position: 'absolute',
                     top: 0,

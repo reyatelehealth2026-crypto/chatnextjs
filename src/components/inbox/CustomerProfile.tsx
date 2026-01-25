@@ -374,7 +374,12 @@ export function CustomerProfile() {
       {/* Profile header */}
       <div className="p-4 border-b text-center">
         <Avatar className="h-20 w-20 mx-auto">
-          <AvatarImage src={user.pictureUrl || undefined} />
+          <AvatarImage 
+            src={user.pictureUrl || undefined} 
+            onError={(e) => {
+              console.warn('Failed to load profile image');
+            }}
+          />
           <AvatarFallback className="text-2xl">
             {getInitials(user.displayName || 'U')}
           </AvatarFallback>

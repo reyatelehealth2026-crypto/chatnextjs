@@ -58,8 +58,11 @@ export async function GET(request: NextRequest) {
       })),
     })
   } catch (error) {
-    console.error('Error fetching notes:', error)
-    return NextResponse.json({ error: 'Failed to fetch notes' }, { status: 500 })
+    console.error('Error fetching notes:', error instanceof Error ? error.message : error)
+    if (error instanceof Error) {
+      console.error('Stack trace:', error.stack)
+    }
+    return NextResponse.json({ error: 'Failed to fetch notes', details: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }
 
@@ -122,8 +125,8 @@ export async function POST(request: NextRequest) {
         : undefined,
     })
   } catch (error) {
-    console.error('Error creating note:', error)
-    return NextResponse.json({ error: 'Failed to create note' }, { status: 500 })
+    console.error('Error creating note:', error instanceof Error ? error.message : error)
+    return NextResponse.json({ error: 'Failed to create note', details: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }
 
@@ -181,8 +184,8 @@ export async function PUT(request: NextRequest) {
         : undefined,
     })
   } catch (error) {
-    console.error('Error updating note:', error)
-    return NextResponse.json({ error: 'Failed to update note' }, { status: 500 })
+    console.error('Error updating note:', error instanceof Error ? error.message : error)
+    return NextResponse.json({ error: 'Failed to update note', details: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }
 
@@ -212,7 +215,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting note:', error)
-    return NextResponse.json({ error: 'Failed to delete note' }, { status: 500 })
+    console.error('Error deleting note:', error instanceof Error ? error.message : error)
+    return NextResponse.json({ error: 'Failed to delete note', details: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
   }
 }
