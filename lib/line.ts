@@ -1,8 +1,8 @@
 type LinePushMessageBody =
   | {
-      to: string
-      messages: Array<{ type: 'text'; text: string }>
-    }
+    to: string
+    messages: Array<{ type: 'text'; text: string }>
+  }
 
 /**
  * Minimal LINE Messaging API client (text push only).
@@ -38,5 +38,20 @@ export async function sendLineTextMessage(params: {
   }
 
   return { ok: true as const, skipped: false as const }
+}
+
+export async function getLineProfile(userId: string, channelAccessToken: string) {
+  const res = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
+    headers: { Authorization: `Bearer ${channelAccessToken}` },
+  })
+
+  if (!res.ok) return null
+
+  const j = await res.json()
+  return {
+    displayName: j.displayName as string,
+    pictureUrl: j.pictureUrl as string | null,
+    statusMessage: j.statusMessage as string | null,
+  }
 }
 

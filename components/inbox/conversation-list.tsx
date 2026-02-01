@@ -78,26 +78,26 @@ export function ConversationList({ initialConversations = [] }: ConversationList
 
       const response = await fetch(url.toString())
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch conversations')
-        }
+      if (!response.ok) {
+        throw new Error('Failed to fetch conversations')
+      }
 
-        const json = await response.json()
-        const next: Conversation[] = json?.data?.conversations || []
-        setConversations(next)
+      const json = await response.json()
+      const next: Conversation[] = json?.data?.conversations || []
+      setConversations(next)
 
-        // Keep selection consistent if items disappear.
-        setSelectedIds((prev) => {
-          if (prev.size === 0) return prev
-          const ids = new Set(next.map((c) => c.id))
-          const filtered = new Set<string>()
-          for (const id of prev) if (ids.has(id)) filtered.add(id)
-          return filtered
-        })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred')
-      } finally {
-        if (showLoading) {
+      // Keep selection consistent if items disappear.
+      setSelectedIds((prev) => {
+        if (prev.size === 0) return prev
+        const ids = new Set(next.map((c) => c.id))
+        const filtered = new Set<string>()
+        for (const id of prev) if (ids.has(id)) filtered.add(id)
+        return filtered
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      if (showLoading) {
         setIsLoading(false)
       }
     }
@@ -128,7 +128,7 @@ export function ConversationList({ initialConversations = [] }: ConversationList
 
   // Virtual scrolling setup
   const [parentRef, setParentRef] = useState<HTMLDivElement | null>(null)
-  
+
   const virtualizer = useVirtualizer({
     count: conversations.length,
     getScrollElement: () => parentRef,
@@ -201,7 +201,7 @@ export function ConversationList({ initialConversations = [] }: ConversationList
       {selectedIds.size > 0 && (
         <div className="flex items-center justify-between gap-3 border-b bg-white p-3">
           <div className="text-sm text-gray-700">
-            Selected: <span className="font-semibold">{selectedIds.size}</span>
+            เลือกแล้ว: <span className="font-semibold">{selectedIds.size}</span>
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -228,45 +228,45 @@ export function ConversationList({ initialConversations = [] }: ConversationList
               onClick={clearSelected}
               disabled={isBulkUpdating}
             >
-              Clear
+              ล้างค่า
             </button>
           </div>
         </div>
       )}
 
       <div ref={setParentRef} className="flex-1 overflow-auto">
-      <div
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: '100%',
-          position: 'relative',
-        }}
-      >
-        {virtualizer.getVirtualItems().map((virtualItem) => {
-          const conversation = conversations[virtualItem.index]
-          
-          return (
-            <div
-              key={virtualItem.key}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: `${virtualItem.size}px`,
-                transform: `translateY(${virtualItem.start}px)`,
-              }}
-            >
-              <ConversationCard
-                conversation={conversation}
-                showSelect
-                selected={selectedIds.has(conversation.id)}
-                onToggleSelect={toggleSelected}
-              />
-            </div>
-          )
-        })}
-      </div>
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const conversation = conversations[virtualItem.index]
+
+            return (
+              <div
+                key={virtualItem.key}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualItem.size}px`,
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <ConversationCard
+                  conversation={conversation}
+                  showSelect
+                  selected={selectedIds.has(conversation.id)}
+                  onToggleSelect={toggleSelected}
+                />
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

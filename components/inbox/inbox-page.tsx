@@ -22,7 +22,8 @@ export function InboxPage() {
   const dateTo = params.get('dateTo') ?? ''
 
   const urlBase = useMemo(() => {
-    return new URL(pathname, window.location.origin)
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+    return new URL(pathname, origin)
   }, [pathname])
 
   const update = (next: Partial<Record<string, string>>) => {
@@ -44,9 +45,9 @@ export function InboxPage() {
   return (
     <div className="flex flex-col h-full" id="main">
       <div className="p-6 border-b border-gray-200 bg-white">
-        <h1 className="text-2xl font-bold text-gray-900">Conversations</h1>
+        <h1 className="text-2xl font-bold text-gray-900">รายการสนทนา</h1>
         <p className="mt-2 text-gray-600">
-          Manage customer conversations and messages
+          จัดการการสนทนากับลูกค้าและข้อความ
         </p>
 
         <div className="mt-4 grid gap-2 md:grid-cols-6">
@@ -55,33 +56,33 @@ export function InboxPage() {
             value={status}
             onChange={(e) => update({ status: e.target.value })}
           >
-            <option value="">All statuses</option>
-            <option value="OPEN">Open</option>
-            <option value="PENDING">Pending</option>
-            <option value="RESOLVED">Resolved</option>
-            <option value="CLOSED">Closed</option>
+            <option value="">สถานะทั้งหมด</option>
+            <option value="OPEN">เปิด</option>
+            <option value="PENDING">รอดำเนินการ</option>
+            <option value="RESOLVED">แก้ไขแล้ว</option>
+            <option value="CLOSED">ปิด</option>
           </select>
           <input
             className="h-10 rounded border px-3 text-sm md:col-span-2"
-            placeholder="Search customer/message…"
+            placeholder="ค้นหาลูกค้า/ข้อความ..."
             value={search}
             onChange={(e) => update({ search: e.target.value })}
           />
           <input
             className="h-10 rounded border px-3 text-sm md:col-span-1"
-            placeholder="Tag…"
+            placeholder="ค้นหาด้วยแท็ก..."
             value={tag}
             onChange={(e) => update({ tag: e.target.value })}
           />
           <input
             className="h-10 rounded border px-3 text-sm md:col-span-1"
-            placeholder="Date from (YYYY-MM-DD)"
+            placeholder="จากวันที่ (YYYY-MM-DD)"
             value={dateFrom}
             onChange={(e) => update({ dateFrom: e.target.value })}
           />
           <input
             className="h-10 rounded border px-3 text-sm md:col-span-1"
-            placeholder="Date to (YYYY-MM-DD)"
+            placeholder="ถึงวันที่ (YYYY-MM-DD)"
             value={dateTo}
             onChange={(e) => update({ dateTo: e.target.value })}
           />
@@ -95,7 +96,7 @@ export function InboxPage() {
                 type="button"
                 className="rounded-full border bg-gray-50 px-3 py-1 text-xs text-gray-700 hover:bg-gray-100"
                 onClick={() => update({ [f.key]: '' })}
-                title="Remove filter"
+                title="ลบตัวกรอง"
               >
                 {f.label} ✕
               </button>
@@ -107,7 +108,7 @@ export function InboxPage() {
                 router.replace(pathname)
               }
             >
-              Clear all
+              ล้างตัวกรอง
             </button>
           </div>
         )}

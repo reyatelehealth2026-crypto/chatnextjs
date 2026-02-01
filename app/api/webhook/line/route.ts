@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 import prisma from '@/lib/prisma'
 import { sendSseEvent } from '@/lib/sse'
 import { findAutoReply } from '@/lib/auto-reply'
-import { sendLineTextMessage } from '@/lib/line'
+import { sendLineTextMessage, getLineProfile } from '@/lib/line'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -140,6 +140,12 @@ export async function POST(request: NextRequest) {
         dbMessageType = 'FILE'
       }
 
+      // Sync profile from LINE if possible.
+      const profile = await getLineProfile(lineUserId, lineAccount.lineAccessToken)
+      const displayName = profile?.displayName ?? lineUserId
+      const pictureUrl = profile?.pictureUrl ?? null
+      const statusMessage = profile?.statusMessage ?? null
+
       // Ensure customer exists.
       const customer = await prisma.customer.upsert({
         where: {
@@ -148,11 +154,17 @@ export async function POST(request: NextRequest) {
             lineUserId,
           },
         },
-        update: { lastContactAt: new Date() },
+        update: {
+          lastContactAt: new Date(),
+          // Update profile if available
+          ...(profile ? { displayName, pictureUrl, statusMessage } : {}),
+        },
         create: {
           lineAccountId: lineAccount.id,
           lineUserId,
-          displayName: lineUserId,
+          displayName,
+          pictureUrl,
+          statusMessage,
           lastContactAt: new Date(),
         },
         select: { id: true },
@@ -184,14 +196,17 @@ export async function POST(request: NextRequest) {
         ).id
 
       // Idempotent insert by lineMessageId.
-      await prisma.message.create({
-        data: {
+      // Idempotent upsert by lineMessageId.
+      await prisma.message.upsert({
+        where: { lineMessageId: messageId },
+        create: {
           conversationId,
           content,
           direction: 'INBOUND',
           lineMessageId: messageId,
           messageType: dbMessageType,
         },
+        update: {},
       })
 
       await prisma.conversation.update({

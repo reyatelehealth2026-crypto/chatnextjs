@@ -203,9 +203,9 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
     setConversation((prev) =>
       prev
         ? {
-            ...prev,
-            messages: [...prev.messages, optimistic],
-          }
+          ...prev,
+          messages: [...prev.messages, optimistic],
+        }
         : prev
     )
     setMessageDraft('')
@@ -283,36 +283,36 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
 
     const shortcut = value.split(/\s+/)[0]
     const controller = new AbortController()
-    ;(async () => {
-      try {
-        const res = await fetch(`/api/inbox/templates?shortcut=${encodeURIComponent(shortcut)}`, {
-          signal: controller.signal,
-        })
-        if (!res.ok) return
-        const j = await res.json()
-        const list = (j?.data?.templates ?? []).map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          shortcuts: t.shortcuts ?? [],
-        }))
-        setTemplateSuggestions(list)
-        setShowTemplates(list.length > 0)
-      } catch {
-        // ignore
-      }
-    })()
+      ; (async () => {
+        try {
+          const res = await fetch(`/api/inbox/templates?shortcut=${encodeURIComponent(shortcut)}`, {
+            signal: controller.signal,
+          })
+          if (!res.ok) return
+          const j = await res.json()
+          const list = (j?.data?.templates ?? []).map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            shortcuts: t.shortcuts ?? [],
+          }))
+          setTemplateSuggestions(list)
+          setShowTemplates(list.length > 0)
+        } catch {
+          // ignore
+        }
+      })()
 
     return () => controller.abort()
   }, [messageDraft])
 
   const updateStatus = useCallback(
     async (status: ConversationStatus) => {
-        const res = await fetchWithBackoff(
-          `/api/inbox/conversations/${conversationId}/status`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCsrfToken() },
-            body: JSON.stringify({ status }),
+      const res = await fetchWithBackoff(
+        `/api/inbox/conversations/${conversationId}/status`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCsrfToken() },
+          body: JSON.stringify({ status }),
         }
       )
 
@@ -363,10 +363,32 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
     [conversationId, refreshConversation]
   )
 
+
+
   const addTag = useCallback(
     async (name: string) => {
-      if (!customer?.id) return
-      const res = await fetchWithBackoff(`/api/inbox/customers/${customer.id}/tags`, {
+      if (!conversation?.customer?.id) return
+
+      // Optimistic update
+      const optimisticTag: CustomerTag = {
+        id: `optimistic-${Date.now()}`,
+        name,
+        color: '#6B7280', // Default color, server will assign real one
+        createdAt: new Date().toISOString(),
+      }
+
+      setConversation((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          customer: {
+            ...prev.customer,
+            tags: [...(prev.customer.tags ?? []), optimisticTag],
+          },
+        }
+      })
+
+      const res = await fetchWithBackoff(`/api/inbox/customers/${conversation.customer.id}/tags`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCsrfToken() },
         body: JSON.stringify({ name }),
@@ -374,34 +396,73 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
       if (!res.ok) {
         const j = await safeJson(res)
         setError(j?.error?.message ?? 'Failed to add tag')
+        // Rollback on error
+        await refreshConversation()
         return
       }
+      // Re-fetch to get real ID and color
       await refreshConversation()
     },
-    [customer?.id, refreshConversation]
+    [conversation?.customer?.id, refreshConversation]
   )
 
   const removeTag = useCallback(
     async (tagId: string) => {
-      if (!customer?.id) return
+      if (!conversation?.customer?.id) return
+
+      // Optimistic update
+      setConversation((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          customer: {
+            ...prev.customer,
+            tags: (prev.customer.tags ?? []).filter((t) => t.id !== tagId),
+          },
+        }
+      })
+
       const res = await fetchWithBackoff(
-        `/api/inbox/customers/${customer.id}/tags?tagId=${encodeURIComponent(tagId)}`,
+        `/api/inbox/customers/${conversation.customer.id}/tags?tagId=${encodeURIComponent(tagId)}`,
         { method: 'DELETE', headers: { 'x-csrf-token': getCsrfToken() } }
       )
       if (!res.ok) {
         const j = await safeJson(res)
         setError(j?.error?.message ?? 'Failed to remove tag')
+        // Rollback
+        await refreshConversation()
         return
       }
-      await refreshConversation()
+      // No need to re-fetch if successful, but good for consistency
+      // await refreshConversation() 
     },
-    [customer?.id, refreshConversation]
+    [conversation?.customer?.id, refreshConversation]
   )
 
   const addNote = useCallback(
     async (content: string) => {
-      if (!customer?.id) return
-      const res = await fetchWithBackoff(`/api/inbox/customers/${customer.id}/notes`, {
+      if (!conversation?.customer?.id) return
+
+      // Optimistic update (Assuming current user is author - tough without user object in context, but display name is secondary)
+      const optimisticNote: CustomerNote = {
+        id: `optimistic-${Date.now()}`,
+        content,
+        createdAt: new Date().toISOString(),
+        author: { id: 'me', name: 'You', email: '' },
+      }
+
+      setConversation((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          customer: {
+            ...prev.customer,
+            notes: [optimisticNote, ...(prev.customer.notes ?? [])],
+          },
+        }
+      })
+
+      const res = await fetchWithBackoff(`/api/inbox/customers/${conversation.customer.id}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': getCsrfToken() },
         body: JSON.stringify({ content }),
@@ -409,28 +470,42 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
       if (!res.ok) {
         const j = await safeJson(res)
         setError(j?.error?.message ?? 'Failed to add note')
+        await refreshConversation()
         return
       }
       await refreshConversation()
     },
-    [customer?.id, refreshConversation]
+    [conversation?.customer?.id, refreshConversation]
   )
 
   const removeNote = useCallback(
     async (noteId: string) => {
-      if (!customer?.id) return
+      if (!conversation?.customer?.id) return
+
+      // Optimistic update
+      setConversation((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          customer: {
+            ...prev.customer,
+            notes: (prev.customer.notes ?? []).filter((n) => n.id !== noteId),
+          },
+        }
+      })
+
       const res = await fetchWithBackoff(
-        `/api/inbox/customers/${customer.id}/notes?noteId=${encodeURIComponent(noteId)}`,
+        `/api/inbox/customers/${conversation.customer.id}/notes?noteId=${encodeURIComponent(noteId)}`,
         { method: 'DELETE', headers: { 'x-csrf-token': getCsrfToken() } }
       )
       if (!res.ok) {
         const j = await safeJson(res)
         setError(j?.error?.message ?? 'Failed to remove note')
+        await refreshConversation()
         return
       }
-      await refreshConversation()
     },
-    [customer?.id, refreshConversation]
+    [conversation?.customer?.id, refreshConversation]
   )
 
   if (isLoading) {
@@ -458,9 +533,9 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
     return (
       <div className="space-y-4">
         <Link href="/inbox" className="text-sm text-blue-600 hover:underline">
-          ← Back
+          ← ย้อนกลับ
         </Link>
-        <div className="text-gray-600">Conversation not found</div>
+        <div className="text-gray-600">ไม่พบการสนทนา</div>
       </div>
     )
   }
@@ -470,7 +545,7 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
       <div className="flex items-start justify-between gap-4 rounded border bg-white p-4">
         <div className="min-w-0">
           <Link href="/inbox" className="text-sm text-blue-600 hover:underline">
-            ← Back
+            ← ย้อนกลับ
           </Link>
           <div className="mt-2 flex items-center gap-2">
             <h1 className="truncate text-xl font-semibold text-gray-900">
@@ -507,7 +582,7 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
               value={assigneeToAdd}
               onChange={(e) => setAssigneeToAdd(e.target.value)}
             >
-              <option value="">+ Add assignee</option>
+              <option value="">+ เพิ่มผู้รับผิดชอบ</option>
               {users
                 .filter((u) => !assigneeIds.has(u.id))
                 .map((u) => (
@@ -522,7 +597,7 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
               onClick={addAssignee}
               disabled={!assigneeToAdd}
             >
-              Add
+              เพิ่ม
             </button>
           </div>
         </div>
@@ -541,16 +616,14 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
               {conversation.messages.map((m) => (
                 <div
                   key={m.id}
-                  className={`flex ${
-                    m.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'
-                  }`}
+                  className={`flex ${m.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'
+                    }`}
                 >
                   <div
-                    className={`max-w-[80%] rounded px-3 py-2 text-sm ${
-                      m.direction === 'OUTBOUND'
-                        ? 'bg-gray-900 text-white'
-                        : 'bg-gray-100 text-gray-900'
-                    }`}
+                    className={`max-w-[80%] rounded px-3 py-2 text-sm ${m.direction === 'OUTBOUND'
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-gray-100 text-gray-900'
+                      }`}
                     title={new Date(m.createdAt).toLocaleString()}
                   >
                     {m.content}
@@ -659,7 +732,7 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
         <h2 className="text-sm font-semibold text-gray-900">Assignees</h2>
         <div className="mt-2 flex flex-wrap gap-2">
           {conversation.assignees.length === 0 && (
-            <span className="text-sm text-gray-500">None</span>
+            <span className="text-sm text-gray-500">ไม่มีผู้รับผิดชอบ</span>
           )}
           {conversation.assignees.map((a) => (
             <div
@@ -673,7 +746,7 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
                 className="text-xs text-red-600 hover:underline"
                 onClick={() => removeAssignee(a.id)}
               >
-                Remove
+                ลบ
               </button>
             </div>
           ))}
@@ -717,7 +790,7 @@ function CustomerSidePanel({
       </div>
 
       <div className="mt-6">
-        <h3 className="text-sm font-semibold text-gray-900">Tags</h3>
+        <h3 className="text-sm font-semibold text-gray-900">แท็ก</h3>
         <div className="mt-2 flex flex-wrap gap-2">
           {(customer.tags ?? []).map((t) => (
             <span
@@ -736,7 +809,7 @@ function CustomerSidePanel({
             </span>
           ))}
           {(customer.tags ?? []).length === 0 && (
-            <span className="text-sm text-gray-500">No tags</span>
+            <span className="text-sm text-gray-500">ไม่มีแท็ก</span>
           )}
         </div>
         <form
@@ -751,7 +824,7 @@ function CustomerSidePanel({
         >
           <input
             className="h-9 flex-1 rounded border px-2 text-sm"
-            placeholder="Add tag…"
+            placeholder="เพิ่มแท็ก..."
             value={tagDraft}
             onChange={(e) => setTagDraft(e.target.value)}
           />
@@ -760,13 +833,13 @@ function CustomerSidePanel({
             className="h-9 rounded bg-gray-900 px-3 text-sm text-white hover:bg-gray-800 disabled:opacity-50"
             disabled={!tagDraft.trim()}
           >
-            Add
+            เพิ่ม
           </button>
         </form>
       </div>
 
       <div className="mt-6">
-        <h3 className="text-sm font-semibold text-gray-900">Notes</h3>
+        <h3 className="text-sm font-semibold text-gray-900">บันทึกช่วยจำ</h3>
         <div className="mt-2 space-y-2">
           {(customer.notes ?? []).map((n) => (
             <div key={n.id} className="rounded border p-2">
@@ -787,7 +860,7 @@ function CustomerSidePanel({
             </div>
           ))}
           {(customer.notes ?? []).length === 0 && (
-            <span className="text-sm text-gray-500">No notes</span>
+            <span className="text-sm text-gray-500">ไม่มีบันทึก</span>
           )}
         </div>
         <form
