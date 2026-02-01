@@ -63,17 +63,40 @@ export async function POST(request: NextRequest) {
     return new Response('OK', { status: 200 })
   }
 
-  // Identify tenant (LINE uses `destination` as channelId).
+  // Find LineAccount - try by destination first, then fallback to finding by signature
   const destination = typeof payload?.destination === 'string' ? payload.destination : null
-  if (!destination) {
-    return new Response('Bad Request', { status: 400 })
+
+  let lineAccount = null
+
+  // Try to find by destination (Channel ID or Bot User ID)
+  if (destination) {
+    lineAccount = await prisma.lineAccount.findUnique({
+      where: { lineChannelId: destination },
+      select: { id: true, lineChannelSecret: true, lineAccessToken: true },
+    })
   }
 
-  const lineAccount = await prisma.lineAccount.findUnique({
-    where: { lineChannelId: destination },
-    select: { id: true, lineChannelSecret: true, lineAccessToken: true },
-  })
+  // If not found by destination, try to find by verifying signature with each account
+  if (!lineAccount && signature) {
+    const allAccounts = await prisma.lineAccount.findMany({
+      select: { id: true, lineChannelId: true, lineChannelSecret: true, lineAccessToken: true },
+    })
+
+    for (const account of allAccounts) {
+      const isValid = verifyLineSignature({
+        channelSecret: account.lineChannelSecret,
+        body: bodyText,
+        signature,
+      })
+      if (isValid) {
+        lineAccount = account
+        break
+      }
+    }
+  }
+
   if (!lineAccount) {
+    console.error('LINE webhook: No matching LineAccount found', { destination })
     return new Response('Not Found', { status: 404 })
   }
 
