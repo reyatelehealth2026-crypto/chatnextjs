@@ -44,7 +44,7 @@ export async function GET() {
  * 
  * Update LineAccount with correct Channel ID from environment
  */
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
     try {
         const channelId = process.env.LINE_CHANNEL_ID
         const channelSecret = process.env.LINE_CHANNEL_SECRET
