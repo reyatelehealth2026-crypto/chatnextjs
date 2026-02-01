@@ -8,6 +8,16 @@ import { sendLineTextMessage } from '@/lib/line'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+/**
+ * GET /api/webhook/line
+ * 
+ * LINE uses GET request to verify webhook URL.
+ * Must return 200 OK for verification to succeed.
+ */
+export async function GET() {
+  return new Response('OK', { status: 200 })
+}
+
 function verifyLineSignature(params: {
   channelSecret: string
   body: string
