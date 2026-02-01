@@ -125,7 +125,7 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
   const [users, setUsers] = useState<UserLite[]>([])
   const [assigneeToAdd, setAssigneeToAdd] = useState<string>('')
 
-  const customer = conversation?.customer
+
 
   const assigneeIds = useMemo(() => {
     return new Set((conversation?.assignees ?? []).map((a) => a.id))
