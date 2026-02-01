@@ -56,6 +56,13 @@ export async function POST(request: NextRequest) {
     return new Response('Bad Request', { status: 400 })
   }
 
+  // LINE verification request - empty events array or no events
+  const events = Array.isArray(payload?.events) ? payload.events : []
+  if (events.length === 0) {
+    // This is a verification request from LINE Console, return 200 OK
+    return new Response('OK', { status: 200 })
+  }
+
   // Identify tenant (LINE uses `destination` as channelId).
   const destination = typeof payload?.destination === 'string' ? payload.destination : null
   if (!destination) {
@@ -84,7 +91,7 @@ export async function POST(request: NextRequest) {
     return new Response('Unauthorized', { status: 401 })
   }
 
-  const events = Array.isArray(payload?.events) ? payload.events : []
+  // events already declared above, reuse it
 
   for (const event of events) {
     try {
