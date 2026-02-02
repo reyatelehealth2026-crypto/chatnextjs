@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
       let content = ''
       let dbMessageType: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'LOCATION' = 'TEXT'
       let metadata: any = null
-      let attachments: Array<{
+      const attachments: Array<{
         fileName: string
         fileSize: number
         mimeType: string

@@ -28,7 +28,7 @@ export async function generateImageThumbnail(
  * For MVP, we skip video thumbnails or use a placeholder image
  */
 export async function generateVideoThumbnail(
-  buffer: Buffer
+  _buffer: Buffer
 ): Promise<Buffer | null> {
   // TODO: Implement with ffmpeg in Phase 3
   // For now, return null (no thumbnail for videos)
