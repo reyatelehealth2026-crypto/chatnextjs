@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server'
+import { env } from './env'
 
 type WindowEntry = {
   resetAt: number
@@ -18,6 +19,17 @@ type RateLimitResult = {
 }
 
 const store = new Map<string, WindowEntry>()
+
+// Cleanup expired entries every minute to prevent memory leak
+const CLEANUP_INTERVAL_MS = 60_000
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of store.entries()) {
+    if (entry.resetAt <= now) {
+      store.delete(key)
+    }
+  }
+}, CLEANUP_INTERVAL_MS)
 
 function nowMs() {
   return Date.now()
@@ -91,9 +103,9 @@ export function checkRateLimit(params: {
 
   const accountId = params.lineAccountId ? `acct:${params.lineAccountId}` : 'acct:anon'
 
-  const sessionLimit = Number(process.env.RATE_LIMIT_PER_SESSION ?? 120)
-  const accountLimit = Number(process.env.RATE_LIMIT_PER_ACCOUNT ?? 1200)
-  const windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60_000)
+  const sessionLimit = env.RATE_LIMIT_PER_SESSION
+  const accountLimit = env.RATE_LIMIT_PER_ACCOUNT
+  const windowMs = env.RATE_LIMIT_WINDOW_MS
 
   const fn = params.mode === 'peek' ? peekFixedWindow : consumeFixedWindow
   const perSession = fn(`rate:${sessionId}`, sessionLimit, windowMs)

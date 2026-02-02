@@ -55,3 +55,27 @@ export async function getLineProfile(userId: string, channelAccessToken: string)
   }
 }
 
+/**
+ * Download media content (image, video, audio, file) from LINE
+ * LINE stores media temporarily - must download within limited time window
+ * https://developers.line.biz/en/reference/messaging-api/#get-content
+ */
+export async function downloadLineContent(params: {
+  messageId: string
+  channelAccessToken: string
+}): Promise<ArrayBuffer> {
+  const res = await fetch(
+    `https://api-data.line.me/v2/bot/message/${params.messageId}/content`,
+    {
+      headers: { Authorization: `Bearer ${params.channelAccessToken}` },
+    }
+  )
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`LINE content download failed: ${res.status} ${detail}`)
+  }
+
+  return await res.arrayBuffer()
+}
+

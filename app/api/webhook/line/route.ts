@@ -1,9 +1,13 @@
 import crypto from 'crypto'
 import { NextRequest } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import prisma from '@/lib/prisma'
 import { sendSseEvent } from '@/lib/sse'
 import { findAutoReply } from '@/lib/auto-reply'
-import { sendLineTextMessage, getLineProfile } from '@/lib/line'
+import { sendLineTextMessage, getLineProfile, downloadLineContent } from '@/lib/line'
+import { lineWebhookPayloadSchema } from '@/lib/line-webhook-schema'
+import { createS3Client, uploadToS3, getPublicUrl, getS3Config } from '@/lib/s3'
+import { generateImageThumbnail } from '@/lib/thumbnails'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,22 +53,33 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get('x-line-signature')
   const bodyText = await request.text()
 
-  let payload: any
+  // Parse and validate payload
+  let rawPayload: unknown
   try {
-    payload = JSON.parse(bodyText)
+    rawPayload = JSON.parse(bodyText)
   } catch {
-    return new Response('Bad Request', { status: 400 })
+    return new Response('Bad Request: Invalid JSON', { status: 400 })
   }
 
+  // Validate payload structure
+  const parseResult = lineWebhookPayloadSchema.safeParse(rawPayload)
+  if (!parseResult.success) {
+    Sentry.captureException(new Error('LINE webhook validation error'), {
+      extra: { errors: parseResult.error.issues, payload: rawPayload },
+    })
+    return new Response('Bad Request: Invalid payload structure', { status: 400 })
+  }
+
+  const payload = parseResult.data
+
   // LINE verification request - empty events array or no events
-  const events = Array.isArray(payload?.events) ? payload.events : []
-  if (events.length === 0) {
+  if (payload.events.length === 0) {
     // This is a verification request from LINE Console, return 200 OK
     return new Response('OK', { status: 200 })
   }
 
   // Find LineAccount - try by destination first, then fallback to finding by signature
-  const destination = typeof payload?.destination === 'string' ? payload.destination : null
+  const destination = payload.destination ?? null
 
   let lineAccount = null
 
@@ -96,7 +111,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (!lineAccount) {
-    console.error('LINE webhook: No matching LineAccount found', { destination })
+    Sentry.captureMessage('LINE webhook: No matching LineAccount found', {
+      level: 'warning',
+      extra: { destination },
+    })
     return new Response('Not Found', { status: 404 })
   }
 
@@ -114,27 +132,100 @@ export async function POST(request: NextRequest) {
     return new Response('Unauthorized', { status: 401 })
   }
 
-  // events already declared above, reuse it
-
-  for (const event of events) {
+  // Process events
+  for (const event of payload.events) {
     try {
-      if (event?.type !== 'message') continue
-      if (event?.source?.type !== 'user') continue
+      // Type guard: only process message events
+      if (event.type !== 'message') continue
+      if (!('source' in event)) continue
+      if (event.source.type !== 'user') continue
+      if (!event.source.userId) continue
 
-      const lineUserId =
-        typeof event?.source?.userId === 'string' ? event.source.userId : null
-      const messageId =
-        typeof event?.message?.id === 'string' ? event.message.id : null
-      const messageType =
-        typeof event?.message?.type === 'string' ? event.message.type : null
-
-      if (!lineUserId || !messageId || !messageType) continue
+      const lineUserId = event.source.userId
+      const messageId = event.message.id
+      const messageType = event.message.type
 
       let content = ''
-      let dbMessageType: any = 'TEXT'
-      if (messageType === 'text') {
-        content = typeof event?.message?.text === 'string' ? event.message.text : ''
+      let dbMessageType: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'FILE' | 'LOCATION' = 'TEXT'
+      let metadata: any = null
+      let attachments: Array<{
+        fileName: string
+        fileSize: number
+        mimeType: string
+        storageKey: string
+        url: string
+        thumbnailUrl?: string
+      }> = []
+
+      if (messageType === 'text' && 'text' in event.message) {
+        content = event.message.text
         dbMessageType = 'TEXT'
+      } else if (messageType === 'image') {
+        content = '[Image]'
+        dbMessageType = 'IMAGE'
+
+        // Download image from LINE and upload to R2
+        try {
+          const s3Client = createS3Client()
+          const s3Config = getS3Config()
+
+          if (s3Client && s3Config) {
+            // Download image content
+            const imageBuffer = Buffer.from(
+              await downloadLineContent({
+                messageId,
+                channelAccessToken: lineAccount.lineAccessToken,
+              })
+            )
+
+            // Upload original image
+            const storageKey = `${lineAccount.id}/messages/${Date.now()}-${messageId}.jpg`
+            await uploadToS3({
+              buffer: imageBuffer,
+              storageKey,
+              mimeType: 'image/jpeg',
+              client: s3Client,
+              bucket: s3Config.bucket,
+            })
+
+            // Generate and upload thumbnail
+            const thumbnailBuffer = await generateImageThumbnail(imageBuffer)
+            const thumbnailKey = `${lineAccount.id}/messages/${Date.now()}-${messageId}-thumb.jpg`
+            await uploadToS3({
+              buffer: thumbnailBuffer,
+              storageKey: thumbnailKey,
+              mimeType: 'image/jpeg',
+              client: s3Client,
+              bucket: s3Config.bucket,
+            })
+
+            // Add to attachments array
+            attachments.push({
+              fileName: `image-${messageId}.jpg`,
+              fileSize: imageBuffer.length,
+              mimeType: 'image/jpeg',
+              storageKey,
+              url: getPublicUrl(storageKey),
+              thumbnailUrl: getPublicUrl(thumbnailKey),
+            })
+          }
+        } catch (err) {
+          Sentry.captureException(err, {
+            tags: { component: 'image-download' },
+            extra: { messageId, lineAccountId: lineAccount.id },
+          })
+          // Continue with placeholder if download fails
+        }
+      } else if (messageType === 'location' && 'latitude' in event.message) {
+        const loc = event.message
+        content = `[Location: ${loc.title || 'Location'}]`
+        dbMessageType = 'LOCATION'
+        metadata = {
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          address: loc.address || null,
+          title: loc.title || null,
+        }
       } else {
         content = `[${messageType}]`
         dbMessageType = 'FILE'
@@ -170,52 +261,72 @@ export async function POST(request: NextRequest) {
         select: { id: true },
       })
 
-      // Find active conversation (OPEN/PENDING), else create new.
+      // Continuous Chat Mode: Find latest conversation regardless of status
       const existingConversation = await prisma.conversation.findFirst({
         where: {
           lineAccountId: lineAccount.id,
           customerId: customer.id,
-          status: { in: ['OPEN', 'PENDING'] },
         },
         orderBy: { lastMessageAt: 'desc' },
-        select: { id: true },
+        select: { id: true, status: true },
       })
 
-      const conversationId =
-        existingConversation?.id ??
-        (
-          await prisma.conversation.create({
-            data: {
-              lineAccountId: lineAccount.id,
-              customerId: customer.id,
-              status: 'OPEN',
-              lastMessageAt: new Date(),
-            },
-            select: { id: true },
-          })
-        ).id
+      let conversationId = existingConversation?.id
 
-      // Idempotent insert by lineMessageId.
+      if (conversationId) {
+        // Reuse and Open if needed
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: {
+            status: 'OPEN',
+            lastMessageAt: new Date(),
+            unreadCount: { increment: 1 },
+          },
+        })
+      } else {
+        // Create new
+        const newConv = await prisma.conversation.create({
+          data: {
+            lineAccountId: lineAccount.id,
+            customerId: customer.id,
+            status: 'OPEN',
+            lastMessageAt: new Date(),
+            unreadCount: 1,
+          },
+          select: { id: true },
+        })
+        conversationId = newConv.id
+      }
+
       // Idempotent upsert by lineMessageId.
-      await prisma.message.upsert({
+      const message = await prisma.message.upsert({
         where: { lineMessageId: messageId },
         create: {
           conversationId,
           content,
           direction: 'INBOUND',
           lineMessageId: messageId,
-          messageType: dbMessageType,
+          messageType: dbMessageType as any,
+          metadata: metadata || undefined,
         },
         update: {},
+        select: { id: true },
       })
 
-      await prisma.conversation.update({
-        where: { id: conversationId, lineAccountId: lineAccount.id },
-        data: {
-          lastMessageAt: new Date(),
-          unreadCount: { increment: 1 },
-        },
-      })
+      // Create file attachments if any
+      if (attachments.length > 0) {
+        await prisma.fileAttachment.createMany({
+          data: attachments.map((a) => ({
+            messageId: message.id,
+            fileName: a.fileName,
+            fileSize: a.fileSize,
+            mimeType: a.mimeType,
+            storageKey: a.storageKey,
+            url: a.url,
+            thumbnailUrl: a.thumbnailUrl || null,
+          })),
+        })
+      }
 
       sendSseEvent(lineAccount.id, 'new-message', { conversationId })
       sendSseEvent(lineAccount.id, 'conversation-updated', { conversationId })
@@ -269,7 +380,10 @@ export async function POST(request: NextRequest) {
             sendSseEvent(lineAccount.id, 'new-message', { conversationId })
             sendSseEvent(lineAccount.id, 'conversation-updated', { conversationId })
           } catch (err) {
-            console.error('Auto-reply failed:', err)
+            Sentry.captureException(err, {
+              tags: { component: 'auto-reply' },
+              extra: { conversationId, lineAccountId: lineAccount.id },
+            })
           }
         }
       }
@@ -278,7 +392,10 @@ export async function POST(request: NextRequest) {
       if (typeof error?.code === 'string' && error.code === 'P2002') {
         continue
       }
-      console.error('LINE webhook event error:', error)
+      Sentry.captureException(error, {
+        tags: { component: 'webhook-event-processing' },
+        extra: { event, lineAccountId: lineAccount.id },
+      })
     }
   }
 
