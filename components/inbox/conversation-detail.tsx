@@ -19,7 +19,7 @@ type UserLite = {
 type Message = {
   id: string
   content: string
-  direction: 'INBOUND' | 'OUTBOUND' | string
+  direction: 'INBOUND' | 'OUTBOUND'
   messageType: string
   createdAt: string
   sender: UserLite | null
