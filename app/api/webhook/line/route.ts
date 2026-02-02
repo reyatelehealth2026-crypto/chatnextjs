@@ -299,6 +299,14 @@ export async function POST(request: NextRequest) {
       }
 
       // Idempotent upsert by lineMessageId.
+      // Check if message already exists to prevent duplicate auto-replies
+      const existingMessage = await prisma.message.findUnique({
+        where: { lineMessageId: messageId },
+        select: { id: true },
+      })
+
+      const isNewMessage = !existingMessage
+
       const message = await prisma.message.upsert({
         where: { lineMessageId: messageId },
         create: {
@@ -332,7 +340,8 @@ export async function POST(request: NextRequest) {
       sendSseEvent(lineAccount.id, 'conversation-updated', { conversationId })
 
       // Auto-reply (best effort) for inbound text messages.
-      if (messageType === 'text' && content) {
+      // Only trigger auto-reply for NEW messages to prevent duplicate responses
+      if (isNewMessage && messageType === 'text' && content) {
         const match = await findAutoReply({
           lineAccountId: lineAccount.id,
           messageText: content,

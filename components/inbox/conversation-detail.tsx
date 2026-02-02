@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getCsrfToken } from '@/lib/csrf-client'
 import { fetchWithBackoff } from '@/lib/retry'
+import { MessageBubble } from './message-bubble'
 
 type ConversationStatus = 'OPEN' | 'PENDING' | 'RESOLVED' | 'CLOSED'
 
@@ -22,6 +23,16 @@ type Message = {
   messageType: string
   createdAt: string
   sender: UserLite | null
+  attachments?: Array<{
+    id: string
+    fileName: string
+    fileSize: number
+    mimeType: string
+    url: string
+    thumbnailUrl: string | null
+    createdAt: string
+  }>
+  metadata?: any
 }
 
 type CustomerTag = {
@@ -614,21 +625,7 @@ export function ConversationDetail({ conversationId }: { conversationId: string 
           <div className="flex-1 overflow-y-auto p-4">
             <div className="space-y-3">
               {conversation.messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`flex ${m.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'
-                    }`}
-                >
-                  <div
-                    className={`max-w-[80%] rounded px-3 py-2 text-sm ${m.direction === 'OUTBOUND'
-                      ? 'bg-gray-900 text-white'
-                      : 'bg-gray-100 text-gray-900'
-                      }`}
-                    title={new Date(m.createdAt).toLocaleString()}
-                  >
-                    {m.content}
-                  </div>
-                </div>
+                <MessageBubble key={m.id} message={m} />
               ))}
             </div>
           </div>
